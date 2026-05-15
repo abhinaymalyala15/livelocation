@@ -1,0 +1,17 @@
+{
+  "name": "FleetTrack",
+  "short_name": "FleetTrack",
+  "description": "Fleet vehicle tracking and management",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f1f5f9",
+  "theme_color": "#0d9488",
+  "icons": [
+    {
+      "src": "https://base44.com/logo_v2.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
