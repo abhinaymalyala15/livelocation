@@ -81,3 +81,11 @@
 ::-webkit-scrollbar-thumb:hover {
   background: hsl(var(--muted-foreground) / 0.4);
 }
+
+/* Google Maps — ensure tiles fill flex containers */
+.gm-style,
+.gm-style > div,
+.map-container-fill {
+  width: 100% !important;
+  height: 100% !important;
+}

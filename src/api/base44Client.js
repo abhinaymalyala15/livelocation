@@ -1,6 +1,16 @@
 // Mock API Client - Replaces Base44 SDK
-import { getStorageData, mockUsers } from './mockData';
+import { getStorageData } from './mockData';
+import { persistFleetData, persistLocationLog, persistTrip } from './persist';
+import {
+  apiLogin,
+  apiMe,
+  apiLogout,
+  getAuthToken,
+} from './authApi';
+
+const afterWrite = () => persistFleetData();
 import { normalizeVehicle, normalizeVehicles } from '@/lib/normalizeVehicle';
+import { syncVehicleRoutes } from '@/lib/routeSimulation';
 
 // Simulate network delay
 const delay = (ms = 300) => new Promise(resolve => setTimeout(resolve, ms));
@@ -38,7 +48,18 @@ const mockApiClient = {
   // Auth methods
   auth: {
     me: async () => {
-      await delay();
+      await delay(50);
+      const token = getAuthToken();
+      if (token) {
+        try {
+          currentUser = await apiMe();
+          isAuthenticated = true;
+          return { ...currentUser };
+        } catch {
+          currentUser = null;
+          isAuthenticated = false;
+        }
+      }
       if (!isAuthenticated || !currentUser) {
         throw { status: 401, message: 'Not authenticated' };
       }
@@ -46,18 +67,16 @@ const mockApiClient = {
     },
     
     login: async (email, password) => {
-      await delay();
-      const user = mockUsers.find(u => u.email === email);
-      if (!user) {
-        throw { status: 401, message: 'Invalid credentials' };
-      }
+      await delay(50);
+      const user = await apiLogin(email, password);
       currentUser = user;
       isAuthenticated = true;
       return { ...user };
     },
     
     logout: async () => {
-      await delay();
+      await delay(50);
+      await apiLogout();
       currentUser = null;
       isAuthenticated = false;
     },
@@ -99,6 +118,7 @@ const mockApiClient = {
           updated_date: new Date().toISOString(),
         };
         getStorageData().vehicles.push(newVehicle);
+        await afterWrite();
         return newVehicle;
       },
       
@@ -116,29 +136,21 @@ const mockApiClient = {
         const vehicles = getStorageData().vehicles;
         const idx = vehicles.findIndex(v => v.id === id);
         if (idx === -1) throw { status: 404, message: 'Vehicle not found' };
-        return vehicles.splice(idx, 1)[0];
+        const removed = vehicles.splice(idx, 1)[0];
+        await afterWrite();
+        return removed;
       },
       
       subscribe: (callback) => {
-        const interval = setInterval(() => {
-          const vehicles = getStorageData().vehicles;
-          vehicles.forEach((v) => {
-            if (v.status === 'on_trip') {
-              const step = 0.0008 + Math.random() * 0.0006;
-              const angle = Math.random() * Math.PI * 2;
-              v.latitude = (v.latitude ?? 17.385) + Math.cos(angle) * step;
-              v.longitude = (v.longitude ?? 78.487) + Math.sin(angle) * step;
-              v.current_latitude = v.latitude;
-              v.current_longitude = v.longitude;
-              v.current_speed = Math.floor(Math.random() * 50 + 12);
-              v.speed = v.current_speed;
-              v.last_location_update = new Date().toISOString();
-              v.updated_date = v.last_location_update;
-            }
-          });
-          callback(normalizeVehicles(vehicles));
-        }, 2500);
+        const tick = () => {
+          const data = getStorageData();
+          syncVehicleRoutes(data.vehicles, data.locationLogs, data.trips);
+          // Positions come from real driver GPS — no demo simulation
+          callback(normalizeVehicles(data.vehicles));
+        };
 
+        tick();
+        const interval = setInterval(tick, 1200);
         return () => clearInterval(interval);
       },
     },
@@ -172,6 +184,8 @@ const mockApiClient = {
           updated_date: new Date().toISOString(),
         };
         getStorageData().trips.push(newTrip);
+        await afterWrite();
+        await persistTrip(newTrip, true);
         return newTrip;
       },
       
@@ -226,6 +240,10 @@ const mockApiClient = {
           timestamp: new Date().toISOString(),
         };
         getStorageData().locationLogs.push(newLog);
+        const trip = getStorageData().trips.find((t) => t.id === data.trip_id);
+        const driverEmail = data.driver_email || trip?.driver_email || null;
+        await afterWrite();
+        await persistLocationLog(newLog, driverEmail);
         return newLog;
       },
     },

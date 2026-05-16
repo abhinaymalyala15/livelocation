@@ -1,8 +1,10 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Map, Shield, Route, Eye, EyeOff, Mail, Lock, Navigation } from "lucide-react";
+import { Map, Shield, Route, Eye, EyeOff, Mail, Lock, Navigation, User } from "lucide-react";
+import { toast } from "sonner";
 import { useAuth } from "@/lib/AuthContext";
+import { apiRegisterDriver, checkApiHealth } from "@/api/authApi";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,11 +21,14 @@ const fadeUp = {
 };
 
 export default function Login() {
-  const [email, setEmail] = useState("admin@fleet.com");
+  const [mode, setMode] = useState("login");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [displayName, setDisplayName] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [apiOk, setApiOk] = useState(null);
   const { login, isAuthenticated, user, isLoadingAuth } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -42,22 +47,29 @@ export default function Login() {
     setError("");
     setSubmitting(true);
     try {
+      if (mode === "register") {
+        if (!displayName.trim()) {
+          setError("Enter your display name");
+          setSubmitting(false);
+          return;
+        }
+        await apiRegisterDriver({
+          email,
+          password,
+          display_name: displayName.trim(),
+        });
+        toast.success("Account created — signing you in…");
+      }
       const loggedIn = await login(email, password);
       const returnTo = searchParams.get("return");
       if (returnTo && returnTo !== "/login") navigate(returnTo, { replace: true });
       else if (loggedIn?.role === "admin") navigate("/admin", { replace: true });
       else navigate("/driver", { replace: true });
-    } catch {
-      setError("Invalid email. Use admin@fleet.com or driver@fleet.com");
+    } catch (err) {
+      setError(err.message || "Sign in failed. Check email and password.");
     } finally {
       setSubmitting(false);
     }
-  };
-
-  const fillDemo = (demoEmail) => {
-    setEmail(demoEmail);
-    setPassword("demo");
-    setError("");
   };
 
   return (
@@ -84,7 +96,7 @@ export default function Login() {
             Track every kilometre across Hyderabad.
           </h1>
           <p className="text-white/55 text-sm leading-relaxed">
-            Hitech City to RGIA — live maps, trip playback, geofences, and realistic fleet demo data built for your submission.
+            Hitech City to RGIA — live maps, trip playback, geofences, and real driver GPS data.
           </p>
           <ul className="grid gap-3 text-sm text-white/80">
             {[
@@ -102,7 +114,7 @@ export default function Login() {
           </ul>
         </motion.div>
 
-        <p className="relative z-10 text-xs text-white/30">FleetTrack · Telangana fleet demo</p>
+        <p className="relative z-10 text-xs text-white/30">FleetTrack · Live fleet operations</p>
       </div>
 
       {/* Right — form */}
@@ -124,36 +136,51 @@ export default function Login() {
           </div>
 
           <div className="surface-card p-7 sm:p-8 space-y-6 shadow-xl border-border/80 ring-1 ring-black/[0.03]">
+            {apiOk === false && (
+              <div className="rounded-lg border border-amber-300 bg-amber-50 text-amber-900 px-3 py-2 text-sm">
+                API server is offline. Run <code className="font-mono text-xs">npm run dev</code> in the project folder (starts API + web).
+              </div>
+            )}
             <div className="space-y-1">
-              <h2 className="text-2xl font-semibold tracking-tight">Sign in</h2>
-              <p className="text-sm text-muted-foreground">Access your fleet command centre</p>
+              <h2 className="text-2xl font-semibold tracking-tight">
+                {mode === "login" ? "Sign in" : "Driver registration"}
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                {mode === "login"
+                  ? "Admin or driver account"
+                  : "Your name will appear on the admin dashboard"}
+              </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
-              <Button
-                type="button"
-                variant={email === "admin@fleet.com" ? "default" : "outline"}
-                size="sm"
-                className="h-10 text-xs font-medium"
-                onClick={() => fillDemo("admin@fleet.com")}
-              >
-                Admin
+            <motion.div className="grid grid-cols-2 gap-2 p-1 bg-muted rounded-lg">
+              <Button type="button" variant={mode === "login" ? "default" : "ghost"} size="sm" onClick={() => setMode("login")}>
+                Sign in
               </Button>
-              <Button
-                type="button"
-                variant={email === "driver@fleet.com" ? "default" : "outline"}
-                size="sm"
-                className="h-10 text-xs font-medium"
-                onClick={() => fillDemo("driver@fleet.com")}
-              >
-                Driver
+              <Button type="button" variant={mode === "register" ? "default" : "ghost"} size="sm" onClick={() => setMode("register")}>
+                New driver
               </Button>
-            </div>
+            </motion.div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
+              {mode === "register" && (
+                <div className="space-y-2">
+                  <Label htmlFor="displayName">Your name (shown to admin) *</Label>
+                  <div className="relative">
+                    <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="displayName"
+                      value={displayName}
+                      onChange={(e) => setDisplayName(e.target.value)}
+                      className="h-12 pl-10 rounded-xl"
+                      placeholder="e.g. Rahul Sharma"
+                      required
+                    />
+                  </div>
+                </div>
+              )}
               <div className="space-y-2">
                 <Label htmlFor="email" className="text-xs font-medium text-muted-foreground">
-                  Work email
+                  Email
                 </Label>
                 <div className="relative group">
                   <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
@@ -179,7 +206,9 @@ export default function Login() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className="h-12 pl-10 pr-11 rounded-xl border-border/80 bg-muted/30 focus-visible:ring-primary/25"
-                    placeholder="Any password (demo)"
+                    placeholder={mode === "register" ? "Choose a password" : "Password"}
+                    required
+                    minLength={4}
                   />
                   <button
                     type="button"
@@ -197,13 +226,20 @@ export default function Login() {
                 </p>
               )}
               <Button type="submit" className="w-full h-12 rounded-xl font-semibold text-base shadow-md" disabled={submitting}>
-                {submitting ? "Signing in…" : "Enter dashboard"}
+                {submitting
+                  ? "Please wait…"
+                  : mode === "login"
+                    ? "Sign in"
+                    : "Create driver account"}
               </Button>
             </form>
           </div>
 
-          <p className="text-xs text-center text-muted-foreground mt-6">
-            Demo accounts with Hyderabad fleet data pre-loaded
+          <p className="text-xs text-center text-muted-foreground mt-6 leading-relaxed">
+            <span className="block font-medium text-foreground/80 mb-1">Admin login</span>
+            admin@fleet.com / admin123
+            <span className="block font-medium text-foreground/80 mt-3 mb-1">Drivers</span>
+            Tap <strong>New driver</strong> — register your name, email, and password. That name appears on the admin dashboard.
           </p>
         </motion.div>
       </div>

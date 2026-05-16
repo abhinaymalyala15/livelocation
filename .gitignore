@@ -16,6 +16,10 @@ lerna-debug.log*
 
 node_modules
 dist
+data/fleet-db.json
+data/fleet.sqlite
+data/fleet.sqlite-wal
+data/fleet.sqlite-shm
 dist-ssr
 *.local
 

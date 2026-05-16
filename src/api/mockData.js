@@ -57,10 +57,10 @@ export const mockVehicles = [
     status: "on_trip",
     current_trip_id: "trip_active_1",
     current_destination: HY.airport.name,
-    latitude: 17.38,
-    longitude: 78.42,
-    current_latitude: 17.38,
-    current_longitude: 78.42,
+    latitude: HY.madhapur.lat,
+    longitude: HY.madhapur.lng,
+    current_latitude: HY.madhapur.lat,
+    current_longitude: HY.madhapur.lng,
     current_speed: 52,
     speed: 52,
     odometer_baseline_km: 28450,
@@ -163,10 +163,10 @@ export const mockVehicles = [
     status: "on_trip",
     current_trip_id: "trip_active_2",
     current_destination: HY.secunderabad.name,
-    latitude: 17.43,
-    longitude: 78.47,
-    current_latitude: 17.43,
-    current_longitude: 78.47,
+    latitude: HY.banjara.lat,
+    longitude: HY.banjara.lng,
+    current_latitude: HY.banjara.lat,
+    current_longitude: HY.banjara.lng,
     current_speed: 38,
     speed: 38,
     odometer_baseline_km: 35600,
@@ -379,9 +379,59 @@ export const mockTrips = [
 const trip1Start = now - 1.2 * 3600000;
 const trip2Start = now - 0.8 * 3600000;
 
+/** Realistic Hyderabad corridor waypoints (follows major roads, not random drift) */
+const ACTIVE_ROUTE_1 = [
+  HY.madhapur,
+  { lat: 17.4483, lng: 78.3915 },
+  HY.gachibowli,
+  { lat: 17.429, lng: 78.365 },
+  { lat: 17.41, lng: 78.378 },
+  { lat: 17.392, lng: 78.395 },
+  { lat: 17.365, lng: 78.41 },
+  { lat: 17.33, lng: 78.418 },
+  { lat: 17.29, lng: 78.425 },
+  { lat: 17.26, lng: 78.428 },
+  HY.airport,
+];
+
+const ACTIVE_ROUTE_2 = [
+  HY.banjara,
+  { lat: 17.42, lng: 78.448 },
+  { lat: 17.425, lng: 78.462 },
+  { lat: 17.432, lng: 78.478 },
+  { lat: 17.437, lng: 78.49 },
+  HY.secunderabad,
+  { lat: 17.436, lng: 78.505 },
+  { lat: 17.434, lng: 78.498 },
+  HY.secunderabad,
+];
+
+function buildRouteFromWaypoints(tripId, vehicleId, waypoints, startTimeMs, intervalMin = 3) {
+  const logs = [];
+  const n = waypoints.length;
+  for (let i = 0; i < n; i++) {
+    const wp = waypoints[i];
+    const lat = wp.lat ?? wp.latitude;
+    const lng = wp.lng ?? wp.longitude;
+    const speed = i === 0 ? 0 : 28 + Math.min(i * 3, 35);
+    logs.push({
+      id: `log_${tripId}_${i}`,
+      trip_id: tripId,
+      vehicle_id: vehicleId,
+      latitude: lat,
+      longitude: lng,
+      speed,
+      heading: 90,
+      accuracy: 4,
+      timestamp: new Date(startTimeMs + i * intervalMin * 60000).toISOString(),
+    });
+  }
+  return logs;
+}
+
 export const mockLocationLogs = [
-  ...buildRoutePoints("trip_active_1", "v1", HY.madhapur, { lat: 17.38, lng: 78.42 }, 14, trip1Start, 5),
-  ...buildRoutePoints("trip_active_2", "v5", HY.banjara, HY.secunderabad, 10, trip2Start, 4),
+  ...buildRouteFromWaypoints("trip_active_1", "v1", ACTIVE_ROUTE_1, trip1Start, 4),
+  ...buildRouteFromWaypoints("trip_active_2", "v5", ACTIVE_ROUTE_2, trip2Start, 3),
   ...buildRoutePoints("trip_c1", "v2", HY.hitech, HY.gachibowli, 8, now - 26 * 3600000, 5),
   ...buildRoutePoints("trip_c2", "v1", HY.kukatpally, HY.uppal, 12, now - 50 * 3600000, 6),
   ...buildRoutePoints("trip_c3", "v5", HY.secunderabad, HY.lbnagar, 10, now - 2 * 86400000, 5),
@@ -462,24 +512,23 @@ export const mockReportSchedules = [
   },
 ];
 
-let storageData = {
-  vehicles: JSON.parse(JSON.stringify(mockVehicles)),
-  trips: JSON.parse(JSON.stringify(mockTrips)),
-  locationLogs: JSON.parse(JSON.stringify(mockLocationLogs)),
-  geofences: JSON.parse(JSON.stringify(mockGeofences)),
-  maintenance: JSON.parse(JSON.stringify(mockMaintenance)),
-  reportSchedules: JSON.parse(JSON.stringify(mockReportSchedules)),
-};
+export const getDefaultStorage = () => ({
+  vehicles: [],
+  trips: [],
+  locationLogs: [],
+  geofences: [],
+  maintenance: [],
+  reportSchedules: [],
+});
+
+let storageData = getDefaultStorage();
 
 export const getStorageData = () => storageData;
 
+export const setStorageData = (data) => {
+  storageData = data;
+};
+
 export const resetStorageData = () => {
-  storageData = {
-    vehicles: JSON.parse(JSON.stringify(mockVehicles)),
-    trips: JSON.parse(JSON.stringify(mockTrips)),
-    locationLogs: JSON.parse(JSON.stringify(mockLocationLogs)),
-    geofences: JSON.parse(JSON.stringify(mockGeofences)),
-    maintenance: JSON.parse(JSON.stringify(mockMaintenance)),
-    reportSchedules: JSON.parse(JSON.stringify(mockReportSchedules)),
-  };
+  storageData = getDefaultStorage();
 };

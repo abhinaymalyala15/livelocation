@@ -16,6 +16,7 @@ import AdminVehicles from './pages/AdminVehicles';
 import AdminTripLogs from './pages/AdminTripLogs';
 import AdminGeofences from './pages/AdminGeofences';
 import AdminLayout from './components/tracking/AdminLayout';
+import FleetDataLoader from './components/FleetDataLoader';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError } = useAuth();
@@ -74,6 +75,7 @@ function App() {
     <ErrorBoundary>
       <AuthProvider>
         <QueryClientProvider client={queryClientInstance}>
+          <FleetDataLoader>
           <GoogleMapsProvider>
             <Router>
               <Routes>
@@ -83,6 +85,7 @@ function App() {
             </Router>
             <Toaster position="top-right" richColors closeButton />
           </GoogleMapsProvider>
+          </FleetDataLoader>
         </QueryClientProvider>
       </AuthProvider>
     </ErrorBoundary>

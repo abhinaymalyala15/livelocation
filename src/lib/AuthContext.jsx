@@ -1,5 +1,6 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
+import { setAuthToken } from '@/api/authApi';
 
 const AuthContext = createContext();
 
@@ -25,6 +26,7 @@ export const AuthProvider = ({ children }) => {
       setAuthChecked(true);
     } catch (error) {
       console.error('Auth check failed:', error);
+      setAuthToken(null);
       setIsAuthenticated(false);
       setAuthChecked(true);
       setAuthError({

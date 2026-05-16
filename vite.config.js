@@ -20,6 +20,14 @@ export default defineConfig(({ mode }) => {
       },
     },
     plugins: [react()],
+    server: {
+      proxy: {
+        '/api': {
+          target: 'http://localhost:3001',
+          changeOrigin: true,
+        },
+      },
+    },
     define: {
       __APP_GOOGLE_MAPS_API_KEY__: JSON.stringify(
         (env.VITE_GOOGLE_MAPS_API_KEY || '').trim()

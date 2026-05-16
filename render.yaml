@@ -1,0 +1,21 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: livelocation
+    runtime: node
+    region: singapore
+    plan: free
+    branch: main
+    buildCommand: npm install --include=dev && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: VITE_GOOGLE_MAPS_API_KEY
+        sync: false
+      - key: VITE_MAP_DEFAULT_LAT
+        value: "17.3850"
+      - key: VITE_MAP_DEFAULT_LNG
+        value: "78.4867"
+      - key: VITE_MAP_DEFAULT_ZOOM
+        value: "11"

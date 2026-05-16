@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useGoogleMap } from "@react-google-maps/api";
 
-const ANIMATION_MS = 1400;
+const ANIMATION_MS = 1100;
 
 function easeOutCubic(t) {
   return 1 - Math.pow(1 - t, 3);

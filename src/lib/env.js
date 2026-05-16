@@ -30,9 +30,9 @@ export const env = {
   get googleMapsApiKey() {
     return readGoogleMapsApiKey();
   },
-  mapDefaultLat: parseFloat(import.meta.env.VITE_MAP_DEFAULT_LAT) || 40.7128,
-  mapDefaultLng: parseFloat(import.meta.env.VITE_MAP_DEFAULT_LNG) || -74.006,
-  mapDefaultZoom: parseInt(import.meta.env.VITE_MAP_DEFAULT_ZOOM, 10) || 12,
+  mapDefaultLat: parseFloat(import.meta.env.VITE_MAP_DEFAULT_LAT) || 17.385,
+  mapDefaultLng: parseFloat(import.meta.env.VITE_MAP_DEFAULT_LNG) || 78.4867,
+  mapDefaultZoom: parseInt(import.meta.env.VITE_MAP_DEFAULT_ZOOM, 10) || 11,
   isDev: import.meta.env.DEV,
 };
 

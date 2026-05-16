@@ -13,6 +13,7 @@ export function normalizeVehicle(vehicle) {
     longitude: lng,
     current_latitude: lat,
     current_longitude: lng,
+    heading: vehicle.heading ?? 0,
   };
 }
 

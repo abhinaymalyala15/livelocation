@@ -3,7 +3,7 @@ import { GoogleMap, Polyline, Marker } from '@react-google-maps/api';
 import { Route, MapPin } from 'lucide-react';
 import moment from 'moment';
 import { useGoogleMaps } from '@/components/GoogleMapsProvider';
-import { defaultMapCenter } from '@/lib/mapConfig';
+import { defaultMapCenter, defaultMapOptions, triggerMapResize } from '@/lib/mapConfig';
 import useTripRoutePath from '@/hooks/useTripRoutePath';
 import useRoutePlayback from '@/hooks/useRoutePlayback';
 import MapsUnavailable from './MapsUnavailable';
@@ -86,7 +86,9 @@ export default function TripRouteMap({ trip, className = '' }) {
   const handleMapLoad = useCallback(
     (map) => {
       mapRef.current = map;
+      triggerMapResize(map);
       fitRoute(map);
+      requestAnimationFrame(() => triggerMapResize(map));
     },
     [fitRoute]
   );
@@ -174,10 +176,8 @@ export default function TripRouteMap({ trip, className = '' }) {
             zoom={12}
             onLoad={handleMapLoad}
             options={{
-              mapTypeControl: true,
-              streetViewControl: false,
-              fullscreenControl: true,
-              zoomControl: true,
+              ...defaultMapOptions,
+              gestureHandling: 'greedy',
             }}
           >
             {path.length > 1 && (

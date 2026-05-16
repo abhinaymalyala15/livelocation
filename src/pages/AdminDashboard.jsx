@@ -55,17 +55,42 @@ export default function AdminDashboard() {
       setTripPath([]);
       return;
     }
+    let cancelled = false;
     base44.entities.LocationLog.filter(
       { trip_id: selectedVehicle.current_trip_id },
-      "created_date",
+      "timestamp",
       500
     ).then((logs) => {
-      const path = logs
-        .filter((l) => l.latitude && l.longitude)
+      if (cancelled) return;
+      const path = [...logs]
+        .filter((l) => l.latitude != null && l.longitude != null)
+        .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
         .map((l) => [l.latitude, l.longitude]);
       setTripPath(path);
     });
+    return () => {
+      cancelled = true;
+    };
   }, [selectedVehicle?.id, selectedVehicle?.current_trip_id, selectedVehicle?.status]);
+
+  // Extend green route line as vehicle moves along the road path
+  useEffect(() => {
+    if (!selectedVehicle || selectedVehicle.status !== "on_trip") return;
+    const lat = selectedVehicle.latitude ?? selectedVehicle.current_latitude;
+    const lng = selectedVehicle.longitude ?? selectedVehicle.current_longitude;
+    if (lat == null || lng == null) return;
+
+    setTripPath((prev) => {
+      if (prev.length === 0) return prev;
+      const last = prev[prev.length - 1];
+      if (Math.abs(last[0] - lat) < 1e-6 && Math.abs(last[1] - lng) < 1e-6) return prev;
+      return [...prev, [lat, lng]];
+    });
+  }, [
+    selectedVehicle?.latitude,
+    selectedVehicle?.longitude,
+    selectedVehicle?.last_location_update,
+  ]);
 
   useEffect(() => {
     const unsubscribe = base44.entities.Vehicle.subscribe(() => {
@@ -154,8 +179,8 @@ export default function AdminDashboard() {
           <StatsCards vehicles={vehicles} tripsToday={todayTrips.length} />
         </div>
 
-        <div className="flex-1 px-4 lg:px-5 pb-4 lg:pb-5 relative min-h-[280px]">
-          <div className="h-full min-h-[280px] rounded-2xl overflow-hidden border border-border shadow-lg surface-card ring-1 ring-black/5">
+        <div className="flex-1 px-4 lg:px-5 pb-4 lg:pb-5 relative min-h-[420px]">
+          <div className="h-full min-h-[420px] rounded-2xl overflow-hidden border border-border shadow-lg surface-card ring-1 ring-black/5 map-container-fill">
             <MapView
               vehicles={vehicles}
               selectedVehicle={selectedVehicle}
