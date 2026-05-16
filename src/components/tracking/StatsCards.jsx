@@ -1,34 +1,64 @@
-import { Truck, Navigation, WifiOff, Route } from "lucide-react";
+import { Truck, Navigation, PauseCircle, WifiOff, Route } from "lucide-react";
+import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { resolveVehicleStatus } from "@/lib/vehicleStatus";
 
 const stats = [
-  { key: "total", label: "Total vehicles", icon: Truck, color: "text-sky-600", bg: "bg-sky-500/10" },
-  { key: "active", label: "Active now", icon: Navigation, color: "text-emerald-600", bg: "bg-emerald-500/10" },
-  { key: "offline", label: "Idle / offline", icon: WifiOff, color: "text-slate-500", bg: "bg-slate-400/10" },
-  { key: "trips", label: "Today's trips", icon: Route, color: "text-violet-600", bg: "bg-violet-500/10" },
+  { key: "total", label: "Total vehicles", icon: Truck, color: "text-sky-600", bg: "bg-sky-500/10", ring: "ring-sky-500/20" },
+  { key: "moving", label: "Moving", icon: Navigation, color: "text-emerald-600", bg: "bg-emerald-500/10", ring: "ring-emerald-500/20" },
+  { key: "idle", label: "Idle", icon: PauseCircle, color: "text-yellow-700", bg: "bg-yellow-500/10", ring: "ring-yellow-500/20" },
+  { key: "offline", label: "Offline / maint.", icon: WifiOff, color: "text-red-600", bg: "bg-red-500/10", ring: "ring-red-500/20" },
 ];
+
+const container = {
+  hidden: { opacity: 0 },
+  show: { opacity: 1, transition: { staggerChildren: 0.06 } },
+};
+
+const item = {
+  hidden: { opacity: 0, y: 10 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.35, ease: [0.22, 1, 0.36, 1] } },
+};
 
 export default function StatsCards({ vehicles, tripsToday }) {
   const counts = {
     total: vehicles.length,
-    active: vehicles.filter((v) => v.status === "on_trip").length,
-    offline: vehicles.filter((v) => v.status === "offline" || v.status === "available").length,
+    moving: vehicles.filter((v) => resolveVehicleStatus(v) === "moving").length,
+    idle: vehicles.filter((v) => resolveVehicleStatus(v) === "idle").length,
+    offline: vehicles.filter((v) => {
+      const s = resolveVehicleStatus(v);
+      return s === "offline" || s === "maintenance";
+    }).length,
     trips: tripsToday || 0,
   };
 
+  const displayStats = [...stats, { key: "trips", label: "Today's trips", icon: Route, color: "text-violet-600", bg: "bg-violet-500/10", ring: "ring-violet-500/20" }];
+
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-      {stats.map((stat) => (
-        <div key={stat.key} className="surface-card p-4 transition-shadow hover:shadow-md">
+    <motion.div
+      variants={container}
+      initial="hidden"
+      animate="show"
+      className="grid grid-cols-2 lg:grid-cols-5 gap-3"
+    >
+      {displayStats.map((stat) => (
+        <motion.div
+          key={stat.key}
+          variants={item}
+          className={cn(
+            "surface-card p-4 transition-all duration-300 hover:shadow-md hover:-translate-y-0.5 ring-1",
+            stat.ring
+          )}
+        >
           <div className="flex items-center justify-between gap-2">
-            <div className={cn("h-10 w-10 rounded-lg flex items-center justify-center shrink-0", stat.bg)}>
+            <div className={cn("h-10 w-10 rounded-xl flex items-center justify-center shrink-0", stat.bg)}>
               <stat.icon className={cn("h-[1.125rem] w-[1.125rem]", stat.color)} />
             </div>
             <span className="text-2xl font-semibold tabular-nums text-foreground">{counts[stat.key]}</span>
           </div>
           <p className="text-xs text-muted-foreground mt-2.5 font-medium">{stat.label}</p>
-        </div>
+        </motion.div>
       ))}
-    </div>
+    </motion.div>
   );
 }

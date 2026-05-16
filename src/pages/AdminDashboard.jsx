@@ -2,16 +2,17 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import StatsCards from "../components/tracking/StatsCards";
+import DashboardHero from "../components/tracking/DashboardHero";
 import VehicleList from "../components/tracking/VehicleList";
 import MapView from "../components/tracking/MapContainer";
 import Loader from "../components/tracking/Loader";
+import { LastUpdatedText } from "../components/tracking/LiveIndicator";
 import { toast } from "sonner";
 import moment from "moment";
 
-// Haversine formula — returns distance in meters between two lat/lng points
 function haversineDistance(lat1, lng1, lat2, lng2) {
   const R = 6371000;
-  const toRad = d => (d * Math.PI) / 180;
+  const toRad = (d) => (d * Math.PI) / 180;
   const dLat = toRad(lat2 - lat1);
   const dLng = toRad(lng2 - lng1);
   const a =
@@ -24,7 +25,7 @@ export default function AdminDashboard() {
   const [selectedVehicle, setSelectedVehicle] = useState(null);
   const [tripPath, setTripPath] = useState([]);
   const [geofenceAlerts, setGeofenceAlerts] = useState([]);
-  const geofenceStateRef = useRef({}); // tracks inside/outside per vehicle+zone to avoid repeat alerts
+  const geofenceStateRef = useRef({});
   const queryClient = useQueryClient();
 
   const { data: vehicles = [], isLoading, dataUpdatedAt } = useQuery({
@@ -38,7 +39,7 @@ export default function AdminDashboard() {
     queryFn: async () => {
       const all = await base44.entities.Trip.list("-created_date", 100);
       const today = moment().startOf("day");
-      return all.filter(t => moment(t.start_time).isAfter(today));
+      return all.filter((t) => moment(t.start_time).isAfter(today));
     },
     refetchInterval: 15000,
   });
@@ -49,23 +50,23 @@ export default function AdminDashboard() {
     refetchInterval: 30000,
   });
 
-  // Fetch trip path (LocationLog) for selected vehicle's active trip
   useEffect(() => {
     if (!selectedVehicle?.current_trip_id || selectedVehicle?.status !== "on_trip") {
       setTripPath([]);
       return;
     }
-    base44.entities.LocationLog
-      .filter({ trip_id: selectedVehicle.current_trip_id }, "created_date", 500)
-      .then(logs => {
-        const path = logs
-          .filter(l => l.latitude && l.longitude)
-          .map(l => [l.latitude, l.longitude]);
-        setTripPath(path);
-      });
+    base44.entities.LocationLog.filter(
+      { trip_id: selectedVehicle.current_trip_id },
+      "created_date",
+      500
+    ).then((logs) => {
+      const path = logs
+        .filter((l) => l.latitude && l.longitude)
+        .map((l) => [l.latitude, l.longitude]);
+      setTripPath(path);
+    });
   }, [selectedVehicle?.id, selectedVehicle?.current_trip_id, selectedVehicle?.status]);
 
-  // Real-time subscription for vehicle updates
   useEffect(() => {
     const unsubscribe = base44.entities.Vehicle.subscribe(() => {
       queryClient.invalidateQueries({ queryKey: ["admin-vehicles"] });
@@ -73,44 +74,38 @@ export default function AdminDashboard() {
     return unsubscribe;
   }, [queryClient]);
 
-  // Geofence checking — runs whenever vehicles or geofences update
   useEffect(() => {
     if (!geofences.length || !vehicles.length) return;
-    const activeGeofences = geofences.filter(g => g.is_active);
-
+    const activeGeofences = geofences.filter((g) => g.is_active);
     const newAlerts = [];
 
-    vehicles.forEach(vehicle => {
-      if (!vehicle.current_latitude || !vehicle.current_longitude) return;
+    vehicles.forEach((vehicle) => {
+      const lat = vehicle.current_latitude ?? vehicle.latitude;
+      const lng = vehicle.current_longitude ?? vehicle.longitude;
+      if (!lat || !lng) return;
 
-      activeGeofences.forEach(zone => {
+      activeGeofences.forEach((zone) => {
         const key = `${vehicle.id}_${zone.id}`;
-        const dist = haversineDistance(
-          vehicle.current_latitude,
-          vehicle.current_longitude,
-          zone.center_latitude,
-          zone.center_longitude
-        );
+        const dist = haversineDistance(lat, lng, zone.center_latitude, zone.center_longitude);
         const isInside = dist <= zone.radius_meters;
         const wasInside = geofenceStateRef.current[key];
 
-        // First time seeing this pair — just record state, no alert
         if (wasInside === undefined) {
           geofenceStateRef.current[key] = isInside;
           return;
         }
 
-        // Exited zone
         if (wasInside && !isInside && zone.alert_on_exit) {
-          const msg = `⚠️ ${vehicle.vehicle_name} exited zone: ${zone.name}`;
-          toast.error(msg, { duration: 8000 });
+          toast.error(`⚠️ ${vehicle.vehicle_name || vehicle.name} exited zone: ${zone.name}`, {
+            duration: 8000,
+          });
           newAlerts.push({ zoneId: zone.id, vehicleId: vehicle.id, type: "exit" });
         }
 
-        // Entered zone
         if (!wasInside && isInside && zone.alert_on_enter) {
-          const msg = `✅ ${vehicle.vehicle_name} arrived at zone: ${zone.name}`;
-          toast.success(msg, { duration: 8000 });
+          toast.success(`✅ ${vehicle.vehicle_name || vehicle.name} arrived at zone: ${zone.name}`, {
+            duration: 8000,
+          });
           newAlerts.push({ zoneId: zone.id, vehicleId: vehicle.id, type: "enter" });
         }
 
@@ -119,34 +114,28 @@ export default function AdminDashboard() {
     });
 
     if (newAlerts.length > 0) {
-      setGeofenceAlerts(prev => {
-        const merged = [...prev, ...newAlerts];
-        // Keep only alerts from the last 60s to avoid stale highlights
-        return merged.slice(-20);
-      });
+      setGeofenceAlerts((prev) => [...prev, ...newAlerts].slice(-20));
     }
   }, [vehicles, geofences]);
 
-  // Update trip path when selectedVehicle data refreshes (new location logs)
   const handleSelectVehicle = useCallback((vehicle) => {
     setSelectedVehicle(vehicle);
   }, []);
 
-  // Keep selectedVehicle in sync with live vehicle data
   useEffect(() => {
     if (!selectedVehicle) return;
-    const updated = vehicles.find(v => v.id === selectedVehicle.id);
+    const updated = vehicles.find((v) => v.id === selectedVehicle.id);
     if (updated) setSelectedVehicle(updated);
-  }, [vehicles]);
+  }, [vehicles, selectedVehicle?.id]);
 
   if (isLoading) return <Loader text="Loading fleet data..." className="h-full" />;
 
-  // Highlighted vehicles that triggered geofence alerts
-  const alertedVehicleIds = new Set(geofenceAlerts.map(a => a.vehicleId));
+  const alertedVehicleIds = new Set(geofenceAlerts.map((a) => a.vehicleId));
+  const activeCount = vehicles.filter((v) => v.status === "on_trip").length;
 
   return (
     <div className="h-full flex flex-col lg:flex-row">
-      <div className="w-full lg:w-80 xl:w-96 border-b lg:border-b-0 lg:border-r border-border bg-card overflow-auto max-h-[40vh] lg:max-h-none">
+      <div className="w-full lg:w-80 xl:w-96 border-b lg:border-b-0 lg:border-r border-border bg-card overflow-auto max-h-[38vh] lg:max-h-none shrink-0 shadow-sm">
         <VehicleList
           vehicles={vehicles}
           selectedVehicleId={selectedVehicle?.id}
@@ -155,13 +144,18 @@ export default function AdminDashboard() {
         />
       </div>
 
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="p-4">
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+        <div className="p-4 lg:p-5 space-y-4">
+          <DashboardHero
+            activeCount={activeCount}
+            totalCount={vehicles.length}
+            lastUpdated={dataUpdatedAt}
+          />
           <StatsCards vehicles={vehicles} tripsToday={todayTrips.length} />
         </div>
 
-        <div className="flex-1 px-4 pb-4 relative">
-          <div className="h-full rounded-xl overflow-hidden border border-border shadow-md surface-card">
+        <div className="flex-1 px-4 lg:px-5 pb-4 lg:pb-5 relative min-h-[280px]">
+          <div className="h-full min-h-[280px] rounded-2xl overflow-hidden border border-border shadow-lg surface-card ring-1 ring-black/5">
             <MapView
               vehicles={vehicles}
               selectedVehicle={selectedVehicle}
@@ -171,12 +165,23 @@ export default function AdminDashboard() {
               geofenceAlerts={geofenceAlerts}
             />
           </div>
-          {/* Live feed indicator */}
-          <div className="absolute top-3 right-7 z-[500] flex items-center gap-2 bg-card/90 backdrop-blur-sm border border-border rounded-full px-3 py-1.5 shadow-sm text-xs">
-            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="text-muted-foreground font-medium">
-              Live · updated {dataUpdatedAt ? moment(dataUpdatedAt).fromNow() : "—"}
-            </span>
+          {selectedVehicle && (
+            <div className="absolute top-3 left-7 z-[500] max-w-[220px] rounded-xl border border-border bg-card/95 backdrop-blur-md px-3 py-2 shadow-md text-xs">
+              <p className="font-semibold truncate">
+                {selectedVehicle.vehicle_name || selectedVehicle.name}
+              </p>
+              <p className="text-muted-foreground truncate">
+                {(selectedVehicle.current_speed ?? selectedVehicle.speed ?? 0).toFixed(0)} km/h
+                {selectedVehicle.current_destination && ` · ${selectedVehicle.current_destination}`}
+              </p>
+            </div>
+          )}
+          <div className="absolute top-3 right-7 z-[500] bg-card/95 backdrop-blur-md border border-border rounded-full px-3 py-1.5 shadow-md">
+            <LastUpdatedText
+              timestamp={dataUpdatedAt ? new Date(dataUpdatedAt).toISOString() : null}
+              prefix="Map"
+              className="font-medium"
+            />
           </div>
         </div>
       </div>

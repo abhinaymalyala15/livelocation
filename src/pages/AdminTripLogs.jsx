@@ -10,8 +10,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import Loader from "../components/tracking/Loader";
 import PageHeader from "../components/tracking/PageHeader";
 import TripRouteMap from "../components/tracking/TripRouteMap";
-import { Search, Download, Route, Clock } from "lucide-react";
+import { Search, Download, Route, Gauge } from "lucide-react";
 import moment from "moment";
+import { getFleetTotalKm, getDriverTotalKm } from "@/lib/fleetMetrics";
+import { LiveBadge } from "../components/tracking/LiveIndicator";
 
 const tripStatusColors = {
   active: "bg-emerald-500/10 text-emerald-700 border-emerald-500/20",
@@ -110,12 +112,14 @@ export default function AdminTripLogs() {
   }
 
   const activeCount = filtered.filter((t) => t.status === "active").length;
+  const fleetTotalKm = getFleetTotalKm(trips);
+  const filteredTotalKm = getFleetTotalKm(filtered);
 
   return (
     <div className="page-shell">
       <PageHeader
         title="Trips"
-        description={`${filtered.length} trips · ${activeCount} active`}
+        description={`${filtered.length} trips · ${activeCount} active · ${filteredTotalKm.toFixed(1)} km in view`}
         action={
           <Button
             variant="outline"
@@ -130,11 +134,27 @@ export default function AdminTripLogs() {
         }
       />
 
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <Card className="surface-card p-4">
+          <p className="text-xs text-muted-foreground font-medium">Fleet distance (all trips)</p>
+          <p className="text-2xl font-semibold tabular-nums mt-1">{fleetTotalKm.toFixed(1)} <span className="text-sm font-normal text-muted-foreground">km</span></p>
+          <p className="text-[11px] text-muted-foreground mt-1">Total logged since demo data load</p>
+        </Card>
+        <Card className="surface-card p-4">
+          <p className="text-xs text-muted-foreground font-medium">This page filter</p>
+          <p className="text-2xl font-semibold tabular-nums mt-1">{filteredTotalKm.toFixed(1)} <span className="text-sm font-normal text-muted-foreground">km</span></p>
+        </Card>
+        <Card className="surface-card p-4 flex flex-col justify-center">
+          <LiveBadge label="Trip logs refreshing" />
+          <p className="text-[11px] text-muted-foreground mt-2">Auto-refresh every 15 seconds</p>
+        </Card>
+      </div>
+
       <Card className="surface-card overflow-hidden">
         <CardHeader className="p-4 pb-2 border-b bg-muted/30">
-          <p className="text-sm font-medium">Route map</p>
+          <p className="text-sm font-medium">Route map & playback</p>
           <p className="text-xs text-muted-foreground">
-            Select a trip in the table to view the full path from start to end.
+            Select a trip, then press play to replay the vehicle path along the route.
           </p>
         </CardHeader>
         <CardContent className="p-4">
@@ -179,12 +199,14 @@ export default function AdminTripLogs() {
                   <TableHead>Start</TableHead>
                   <TableHead>End</TableHead>
                   <TableHead>Duration</TableHead>
+                  <TableHead className="text-right">Trip km</TableHead>
+                  <TableHead className="text-right">Driver total km</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filtered.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
+                    <TableCell colSpan={9} className="text-center py-12 text-muted-foreground">
                       No trips found
                     </TableCell>
                   </TableRow>
@@ -214,6 +236,18 @@ export default function AdminTripLogs() {
                         {t.end_time ? moment(t.end_time).format("MMM D, HH:mm") : "—"}
                       </TableCell>
                       <TableCell className="text-sm">{getDuration(t)}</TableCell>
+                      <TableCell className="text-sm text-right tabular-nums font-medium">
+                        {(t.distance_km ?? t.distance) != null
+                          ? `${Number(t.distance_km ?? t.distance).toFixed(1)} km`
+                          : "—"}
+                      </TableCell>
+                      <TableCell className="text-xs text-right tabular-nums text-muted-foreground">
+                        <span className="inline-flex items-center justify-end gap-1">
+                          <Gauge className="h-3 w-3" />
+                          {getDriverTotalKm(t.driver_email, trips).toFixed(1)} km
+                        </span>
+                        <span className="block text-[10px] mt-0.5">all trips till now</span>
+                      </TableCell>
                     </TableRow>
                   ))
                 )}

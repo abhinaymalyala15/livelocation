@@ -5,8 +5,11 @@ import moment from 'moment';
 import { useGoogleMaps } from '@/components/GoogleMapsProvider';
 import { defaultMapCenter } from '@/lib/mapConfig';
 import useTripRoutePath from '@/hooks/useTripRoutePath';
+import useRoutePlayback from '@/hooks/useRoutePlayback';
 import MapsUnavailable from './MapsUnavailable';
 import Loader from './Loader';
+import AnimatedVehicleMarker from './AnimatedVehicleMarker';
+import RoutePlaybackControls from './RoutePlaybackControls';
 
 const mapContainerStyle = {
   width: '100%',
@@ -29,7 +32,16 @@ const startIcon = {
 };
 
 const endIcon = { ...startIcon, fillColor: '#ef4444' };
-const currentIcon = { ...startIcon, fillColor: '#0ea5e9', scale: 1.1 };
+
+const playbackIcon = {
+  path: pinPath,
+  fillColor: '#0ea5e9',
+  fillOpacity: 1,
+  strokeColor: '#ffffff',
+  strokeWeight: 2,
+  scale: 1.25,
+  anchor: { x: 12, y: 24 },
+};
 
 function getDuration(trip) {
   if (!trip?.start_time) return '—';
@@ -46,12 +58,27 @@ export default function TripRouteMap({ trip, className = '' }) {
   const { isLoaded, isConfigured } = useGoogleMaps();
   const { path, loading, pointCount } = useTripRoutePath(trip);
 
+  const playback = useRoutePlayback(path);
+  const {
+    playing,
+    play,
+    pause,
+    reset,
+    seek,
+    speed,
+    setSpeed,
+    currentPosition,
+    visiblePath,
+    playbackPercent,
+    currentPointIndex,
+  } = playback;
+
   const fitRoute = useCallback(
     (map) => {
       if (!map || path.length === 0 || !window.google?.maps) return;
       const bounds = new window.google.maps.LatLngBounds();
       path.forEach((p) => bounds.extend(p));
-      map.fitBounds(bounds, { top: 48, right: 48, bottom: 48, left: 48 });
+      map.fitBounds(bounds, { top: 56, right: 48, bottom: 80, left: 48 });
     },
     [path]
   );
@@ -68,11 +95,21 @@ export default function TripRouteMap({ trip, className = '' }) {
     if (mapRef.current && path.length > 0) fitRoute(mapRef.current);
   }, [path, fitRoute]);
 
+  useEffect(() => {
+    reset();
+  }, [trip?.id, reset]);
+
+  useEffect(() => {
+    if (!mapRef.current || !currentPosition || !playing) return;
+    mapRef.current.panTo({ lat: currentPosition.lat, lng: currentPosition.lng });
+  }, [currentPosition?.lat, currentPosition?.lng, playing]);
+
   if (!trip) {
     return (
       <div className={`flex flex-col items-center justify-center bg-muted/30 border border-dashed rounded-xl min-h-[280px] ${className}`}>
         <Route className="h-10 w-10 text-muted-foreground/40 mb-2" />
         <p className="text-sm text-muted-foreground">Select a trip to view the full route</p>
+        <p className="text-xs text-muted-foreground/80 mt-1">Use playback to replay the journey</p>
       </div>
     );
   }
@@ -81,12 +118,13 @@ export default function TripRouteMap({ trip, className = '' }) {
   const isActive = trip.status === 'active';
   const startPoint = path[0];
   const endPoint = path.length > 1 ? path[path.length - 1] : null;
-  const showEndMarker = Boolean(endPoint);
-
+  const showEndMarker = Boolean(endPoint) && !playing;
+  const displayPath = playing || playbackPercent > 0 ? visiblePath : path;
   const mapCenter =
-    path.length > 0
+    currentPosition ??
+    (path.length > 0
       ? { lat: path[Math.floor(path.length / 2)].lat, lng: path[Math.floor(path.length / 2)].lng }
-      : defaultMapCenter;
+      : defaultMapCenter);
 
   return (
     <div className={`flex flex-col gap-3 ${className}`}>
@@ -105,11 +143,10 @@ export default function TripRouteMap({ trip, className = '' }) {
         <div className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted/60 px-2 py-1 rounded-md">
           <MapPin className="h-3.5 w-3.5" />
           {pointCount} GPS point{pointCount !== 1 ? 's' : ''}
-          {isActive && ' · live route'}
         </div>
       </div>
 
-      <div className="relative flex-1 min-h-[320px] lg:min-h-[420px] rounded-xl overflow-hidden border bg-muted/20">
+      <div className="relative flex-1 min-h-[320px] lg:min-h-[400px] rounded-xl overflow-hidden border bg-muted/20">
         {loading && (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80">
             <Loader text="Loading route..." />
@@ -120,7 +157,6 @@ export default function TripRouteMap({ trip, className = '' }) {
           <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground gap-2 p-4 text-center">
             <Route className="h-10 w-10 opacity-30" />
             <p className="text-sm font-medium">No route data for this trip</p>
-            <p className="text-xs">GPS points are recorded when the driver tracks a trip.</p>
           </div>
         )}
 
@@ -144,34 +180,29 @@ export default function TripRouteMap({ trip, className = '' }) {
               zoomControl: true,
             }}
           >
-            <Polyline
-              path={path}
-              options={{
-                strokeColor: isActive ? '#0ea5e9' : '#10b981',
-                strokeOpacity: 0.9,
-                strokeWeight: 5,
-                geodesic: true,
-              }}
-            />
+            {path.length > 1 && (
+              <Polyline
+                path={path}
+                options={{
+                  strokeColor: '#94a3b8',
+                  strokeOpacity: 0.35,
+                  strokeWeight: 5,
+                  geodesic: true,
+                }}
+              />
+            )}
 
-            {path.length > 2 &&
-              path.slice(1, -1).map((pt, i) => (
-                <Marker
-                  key={`wp-${i}`}
-                  position={pt}
-                  icon={{
-                    path: window.google.maps.SymbolPath.CIRCLE,
-                    scale: 4,
-                    fillColor: isActive ? '#0ea5e9' : '#10b981',
-                    fillOpacity: 0.6,
-                    strokeColor: '#fff',
-                    strokeWeight: 1,
-                  }}
-                  title={
-                    pt.timestamp ? moment(pt.timestamp).format('HH:mm:ss') : `Waypoint ${i + 2}`
-                  }
-                />
-              ))}
+            {displayPath.length > 1 && (
+              <Polyline
+                path={displayPath}
+                options={{
+                  strokeColor: isActive ? '#0ea5e9' : '#10b981',
+                  strokeOpacity: 0.95,
+                  strokeWeight: 5,
+                  geodesic: true,
+                }}
+              />
+            )}
 
             {startPoint && (
               <Marker
@@ -182,22 +213,42 @@ export default function TripRouteMap({ trip, className = '' }) {
               />
             )}
 
-            {showEndMarker && (
+            {showEndMarker && endPoint && (
               <Marker
                 position={endPoint}
-                title={isActive ? 'Current position' : `End: ${trip.end_location || 'Arrival'}`}
-                icon={isActive ? currentIcon : endIcon}
-                label={{
-                  text: isActive ? 'NOW' : 'END',
-                  color: '#fff',
-                  fontSize: '10px',
-                  fontWeight: 'bold',
-                }}
+                title={`End: ${trip.end_location || 'Arrival'}`}
+                icon={endIcon}
+                label={{ text: 'END', color: '#fff', fontSize: '10px', fontWeight: 'bold' }}
+              />
+            )}
+
+            {currentPosition && (playing || playbackPercent > 0) && (
+              <AnimatedVehicleMarker
+                position={currentPosition}
+                icon={playbackIcon}
+                title="Playback position"
+                zIndex={2000}
               />
             )}
           </GoogleMap>
         )}
       </div>
+
+      {!loading && path.length >= 2 && (
+        <RoutePlaybackControls
+          playing={playing}
+          onPlay={play}
+          onPause={pause}
+          onReset={reset}
+          playbackPercent={playbackPercent}
+          onSeek={seek}
+          speed={speed}
+          onSpeedChange={setSpeed}
+          currentPointIndex={currentPointIndex}
+          pointCount={pointCount}
+          currentTimestamp={currentPosition?.timestamp}
+        />
+      )}
 
       {!loading && path.length > 0 && (
         <div className="flex flex-wrap gap-4 text-xs text-muted-foreground px-1">
@@ -209,12 +260,6 @@ export default function TripRouteMap({ trip, className = '' }) {
             <span className="flex items-center gap-1.5">
               <span className="h-2.5 w-2.5 rounded-full bg-red-500" />
               End {moment(trip.end_time).format('MMM D, HH:mm')}
-            </span>
-          )}
-          {isActive && (
-            <span className="flex items-center gap-1.5 text-sky-600">
-              <span className="h-2 w-2 rounded-full bg-sky-500 animate-pulse" />
-              Route updates as the vehicle moves
             </span>
           )}
         </div>

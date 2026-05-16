@@ -120,21 +120,25 @@ const mockApiClient = {
       },
       
       subscribe: (callback) => {
-        // Mock subscription - simulates real-time updates
         const interval = setInterval(() => {
           const vehicles = getStorageData().vehicles;
-          // Simulate location updates for vehicles in trip
-          vehicles.forEach(v => {
+          vehicles.forEach((v) => {
             if (v.status === 'on_trip') {
-              v.latitude += (Math.random() - 0.5) * 0.01;
-              v.longitude += (Math.random() - 0.5) * 0.01;
-              v.speed = Math.floor(Math.random() * 70 + 10);
-              v.updated_date = new Date().toISOString();
+              const step = 0.0008 + Math.random() * 0.0006;
+              const angle = Math.random() * Math.PI * 2;
+              v.latitude = (v.latitude ?? 17.385) + Math.cos(angle) * step;
+              v.longitude = (v.longitude ?? 78.487) + Math.sin(angle) * step;
+              v.current_latitude = v.latitude;
+              v.current_longitude = v.longitude;
+              v.current_speed = Math.floor(Math.random() * 50 + 12);
+              v.speed = v.current_speed;
+              v.last_location_update = new Date().toISOString();
+              v.updated_date = v.last_location_update;
             }
           });
           callback(normalizeVehicles(vehicles));
-        }, 5000);
-        
+        }, 2500);
+
         return () => clearInterval(interval);
       },
     },
