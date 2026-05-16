@@ -1,14 +1,23 @@
 import crypto from "crypto";
 import { db } from "./db.js";
 
-const sessions = new Map();
-
 export function hashPassword(password) {
   return crypto.createHash("sha256").update(String(password)).digest("hex");
 }
 
 export function createToken() {
   return crypto.randomBytes(24).toString("hex");
+}
+
+function saveSession(token, user) {
+  db.prepare(
+    `INSERT INTO auth_sessions (token, user_json, created_at) VALUES (?, ?, ?)
+     ON CONFLICT(token) DO UPDATE SET user_json = excluded.user_json`
+  ).run(token, JSON.stringify(user), new Date().toISOString());
+}
+
+function deleteSession(token) {
+  if (token) db.prepare("DELETE FROM auth_sessions WHERE token = ?").run(token);
 }
 
 export function seedDefaultAdmin() {
@@ -65,28 +74,43 @@ export function loginUser(email, password) {
   }
   const user = toPublicUser(row);
   const token = createToken();
-  sessions.set(token, user);
+  saveSession(token, user);
   return { user, token };
 }
 
 export function getUserByToken(token) {
   if (!token) return null;
-  return sessions.get(token) || null;
+  const row = db.prepare("SELECT user_json FROM auth_sessions WHERE token = ?").get(token);
+  if (!row) return null;
+  try {
+    return JSON.parse(row.user_json);
+  } catch {
+    deleteSession(token);
+    return null;
+  }
 }
 
 export function logoutToken(token) {
-  if (token) sessions.delete(token);
+  deleteSession(token);
 }
 
 export function updateDisplayName(email, display_name) {
   const name = String(display_name).trim();
   if (!name) throw { status: 400, message: "Display name is required" };
 
-  db.prepare("UPDATE users SET display_name = ? WHERE email = ?").run(name, email);
-  const row = db.prepare("SELECT * FROM users WHERE email = ?").get(email);
+  const normalizedEmail = String(email).trim().toLowerCase();
+  db.prepare("UPDATE users SET display_name = ? WHERE email = ?").run(name, normalizedEmail);
+  const row = db.prepare("SELECT * FROM users WHERE email = ?").get(normalizedEmail);
   const user = toPublicUser(row);
-  for (const [token, sess] of sessions.entries()) {
-    if (sess.email === email) sessions.set(token, user);
+
+  const sessions = db.prepare("SELECT token, user_json FROM auth_sessions").all();
+  for (const sess of sessions) {
+    try {
+      const parsed = JSON.parse(sess.user_json);
+      if (parsed.email === normalizedEmail) saveSession(sess.token, user);
+    } catch {
+      deleteSession(sess.token);
+    }
   }
   return user;
 }

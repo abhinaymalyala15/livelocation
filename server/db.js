@@ -69,6 +69,12 @@ db.exec(`
   );
 
   CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
+
+  CREATE TABLE IF NOT EXISTS auth_sessions (
+    token TEXT PRIMARY KEY,
+    user_json TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  );
 `);
 
 export function getSnapshot() {

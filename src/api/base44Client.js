@@ -15,6 +15,25 @@ import { syncVehicleRoutes } from '@/lib/routeSimulation';
 // Simulate network delay
 const delay = (ms = 300) => new Promise(resolve => setTimeout(resolve, ms));
 
+const EMAIL_FIELDS = new Set(["driver_email", "email"]);
+
+function matchesQuery(item, key, value) {
+  if (value == null || value === "") return true;
+  const itemVal = item[key];
+  if (EMAIL_FIELDS.has(key)) {
+    return String(itemVal || "").trim().toLowerCase() === String(value).trim().toLowerCase();
+  }
+  return itemVal === value;
+}
+
+function applyFilter(items, query = {}) {
+  let results = Array.isArray(items) ? items : [];
+  Object.keys(query).forEach((key) => {
+    results = results.filter((item) => matchesQuery(item, key, query[key]));
+  });
+  return results;
+}
+
 const sortList = (items, sortBy, limit) => {
   const list = Array.isArray(items) ? [...items] : [];
   if (sortBy) {
@@ -96,11 +115,7 @@ const mockApiClient = {
       
       filter: async (query = {}) => {
         await delay();
-        let results = getStorageData().vehicles;
-        Object.keys(query).forEach(key => {
-          results = results.filter(item => item[key] === query[key]);
-        });
-        return normalizeVehicles(results);
+        return normalizeVehicles(applyFilter(getStorageData().vehicles, query));
       },
       
       get: async (id) => {
@@ -111,9 +126,13 @@ const mockApiClient = {
       
       create: async (data) => {
         await delay();
+        const payload = { ...data };
+        if (payload.driver_email) {
+          payload.driver_email = String(payload.driver_email).trim().toLowerCase();
+        }
         const newVehicle = {
           id: 'vehicle_' + Date.now(),
-          ...data,
+          ...payload,
           created_date: new Date().toISOString(),
           updated_date: new Date().toISOString(),
         };
@@ -127,7 +146,12 @@ const mockApiClient = {
         const vehicles = getStorageData().vehicles;
         const idx = vehicles.findIndex(v => v.id === id);
         if (idx === -1) throw { status: 404, message: 'Vehicle not found' };
-        vehicles[idx] = { ...vehicles[idx], ...data, updated_date: new Date().toISOString() };
+        const payload = { ...data };
+        if (payload.driver_email) {
+          payload.driver_email = String(payload.driver_email).trim().toLowerCase();
+        }
+        vehicles[idx] = { ...vehicles[idx], ...payload, updated_date: new Date().toISOString() };
+        await afterWrite();
         return vehicles[idx];
       },
       
@@ -163,11 +187,7 @@ const mockApiClient = {
       
       filter: async (query = {}) => {
         await delay();
-        let results = getStorageData().trips;
-        Object.keys(query).forEach(key => {
-          results = results.filter(item => item[key] === query[key]);
-        });
-        return results;
+        return applyFilter(getStorageData().trips, query);
       },
       
       get: async (id) => {
@@ -215,10 +235,7 @@ const mockApiClient = {
       
       filter: async (query = {}, sortBy = null, limit = 100) => {
         await delay();
-        let results = getStorageData().locationLogs;
-        Object.keys(query).forEach(key => {
-          results = results.filter(item => item[key] === query[key]);
-        });
+        let results = applyFilter(getStorageData().locationLogs, query);
         
         if (sortBy) {
           results.sort((a, b) => {

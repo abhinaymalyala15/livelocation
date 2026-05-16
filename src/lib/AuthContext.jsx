@@ -1,6 +1,7 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { setAuthToken } from '@/api/authApi';
+import { reloadFleetData } from '@/api/persist';
 
 const AuthContext = createContext();
 
@@ -43,6 +44,7 @@ export const AuthProvider = ({ children }) => {
     setAuthError(null);
     try {
       const currentUser = await base44.auth.login(email, password);
+      await reloadFleetData();
       setUser(currentUser);
       setIsAuthenticated(true);
       setAuthChecked(true);

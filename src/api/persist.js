@@ -22,8 +22,14 @@ export function isDatabaseOnline() {
   return dbAvailable === true;
 }
 
+/** Reload from server after login so saved vehicles/trips appear */
+export async function reloadFleetData() {
+  return loadFleetData({ forceServer: true });
+}
+
 /** Load fleet data: SQLite API first, then localStorage, then defaults */
-export async function loadFleetData() {
+export async function loadFleetData(options = {}) {
+  const { forceServer = false } = options;
   const online = await checkDatabaseHealth();
 
   if (online) {
@@ -32,6 +38,30 @@ export async function loadFleetData() {
       const res = await fetch(`${API_BASE}/data`);
       if (res.ok) {
         const data = await res.json();
+        const hasFleet =
+          (data.vehicles?.length ?? 0) > 0 ||
+          (data.trips?.length ?? 0) > 0 ||
+          (data.locationLogs?.length ?? 0) > 0;
+
+        if (!hasFleet && !forceServer) {
+          try {
+            const local = localStorage.getItem(STORAGE_KEY);
+            if (local) {
+              const localData = JSON.parse(local);
+              const localHas =
+                (localData.vehicles?.length ?? 0) > 0 ||
+                (localData.trips?.length ?? 0) > 0;
+              if (localHas) {
+                setStorageData(localData);
+                await persistFleetData(localData);
+                return { source: "localStorage-synced", data: localData };
+              }
+            }
+          } catch (e) {
+            console.warn("[persist] local merge failed", e);
+          }
+        }
+
         setStorageData(data);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
         return { source: "database", data };

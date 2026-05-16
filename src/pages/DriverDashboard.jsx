@@ -27,6 +27,7 @@ import EventTimeline from "@/components/driver/EventTimeline";
 import SOSPanel from "@/components/driver/SOSPanel";
 import DriverStorageStatus from "@/components/driver/DriverStorageStatus";
 import DriverOnboarding from "@/components/driver/DriverOnboarding";
+import { reloadFleetData } from "@/api/persist";
 
 export default function DriverDashboard() {
   const navigate = useNavigate();
@@ -79,6 +80,12 @@ export default function DriverDashboard() {
     queryFn: () => base44.entities.Vehicle.filter({ driver_email: user.email }),
     enabled: !!user?.email,
   });
+
+  useEffect(() => {
+    if (!selectedVehicleId && vehicles.length > 0) {
+      setSelectedVehicleId(vehicles[0].id);
+    }
+  }, [vehicles, selectedVehicleId]);
 
   useEffect(() => {
     if (!selectedVehicleId || !vehicles.length) return;
@@ -195,6 +202,7 @@ export default function DriverDashboard() {
           <DriverOnboarding
             user={user}
             onComplete={async () => {
+              await reloadFleetData();
               await checkAppState();
               queryClient.invalidateQueries({ queryKey: ["driver-vehicles"] });
               queryClient.invalidateQueries({ queryKey: ["admin-vehicles"] });
