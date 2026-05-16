@@ -82,7 +82,21 @@ app.get("/api/users", (req, res) => {
 });
 
 app.get("/api/health", (_req, res) => {
-  res.json({ ok: true, database: dbPath, type: "sqlite" });
+  const summary = getStorageSummary();
+  res.json({
+    ok: true,
+    database: dbPath,
+    type: "sqlite",
+    persistentDataDir: !!process.env.FLEET_DATA_DIR,
+    fleet: summary
+      ? {
+          vehicles: summary.vehicles,
+          trips: summary.trips,
+          locationLogs: summary.locationLogs,
+          lastUpdated: summary.lastSnapshot?.updated_at,
+        }
+      : null,
+  });
 });
 
 /** Full fleet JSON (vehicles, trips, locationLogs, …) */

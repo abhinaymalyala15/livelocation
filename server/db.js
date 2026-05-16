@@ -4,7 +4,10 @@ import { fileURLToPath } from "url";
 import { DatabaseSync } from "node:sqlite";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const dataDir = path.join(__dirname, "..", "data");
+/** On Render: mount a persistent disk to this path (e.g. FLEET_DATA_DIR=/var/data) */
+const dataDir = process.env.FLEET_DATA_DIR
+  ? path.resolve(process.env.FLEET_DATA_DIR)
+  : path.join(__dirname, "..", "data");
 const dbPath = path.join(dataDir, "fleet.sqlite");
 const legacyJsonPath = path.join(dataDir, "fleet-db.json");
 

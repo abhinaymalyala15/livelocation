@@ -89,15 +89,13 @@ export async function loadFleetData(options = {}) {
   return { source: "default", data };
 }
 
-/** Save after every driver/admin mutation */
+/** Save after every driver/admin mutation — always retry server (don't skip after one failed health check) */
 export async function persistFleetData(data = getStorageData()) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   } catch (e) {
     console.warn("[persist] localStorage save failed", e);
   }
-
-  if (dbAvailable === false) return { savedLocal: true, savedDb: false };
 
   try {
     const res = await fetch(`${API_BASE}/data`, {
@@ -109,6 +107,8 @@ export async function persistFleetData(data = getStorageData()) {
       dbAvailable = true;
       return { savedLocal: true, savedDb: true };
     }
+    console.warn("[persist] database PUT failed", res.status);
+    dbAvailable = false;
   } catch (e) {
     console.warn("[persist] database save failed", e);
     dbAvailable = false;
@@ -121,8 +121,6 @@ export async function persistFleetData(data = getStorageData()) {
 export async function persistLocationLog(log, driverEmail) {
   const payload = { ...log, driver_email: driverEmail };
   await persistFleetData();
-
-  if (dbAvailable === false) return;
 
   try {
     await fetch(`${API_BASE}/location-logs`, {
@@ -137,8 +135,6 @@ export async function persistLocationLog(log, driverEmail) {
 
 export async function persistTrip(trip, isNew = false) {
   await persistFleetData();
-
-  if (dbAvailable === false) return;
 
   try {
     const url = isNew ? `${API_BASE}/trips` : `${API_BASE}/trips/${trip.id}`;
