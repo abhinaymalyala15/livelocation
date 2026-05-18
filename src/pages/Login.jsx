@@ -36,7 +36,7 @@ export default function Login() {
   const [existingAccount, setExistingAccount] = useState(null);
   const [lookingUp, setLookingUp] = useState(false);
   const lookupRequestRef = useRef(0);
-  const { login, isAuthenticated, user, isLoadingAuth } = useAuth();
+  const { login, isAuthenticated, user, isLoadingAuth, authError } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
@@ -50,7 +50,7 @@ export default function Login() {
   }, []);
 
   useEffect(() => {
-    if (!isLoadingAuth && isAuthenticated && user) {
+    if (!isLoadingAuth && isAuthenticated && user && !submitting) {
       const returnTo = searchParams.get("return");
       if (returnTo && returnTo !== "/login") navigate(returnTo, { replace: true });
       else if (user.role === "admin") navigate("/admin", { replace: true });
@@ -69,7 +69,7 @@ export default function Login() {
     setError("");
 
     try {
-      const result = await apiLookupUser(email);
+      const result = await apiLookupUser(email.trim().toLowerCase());
       if (requestId !== lookupRequestRef.current) return;
 
       if (result.exists && result.user) {
@@ -110,6 +110,8 @@ export default function Login() {
     else navigate("/driver", { replace: true });
   };
 
+  const normalizedEmail = email.trim().toLowerCase();
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
@@ -117,7 +119,7 @@ export default function Login() {
     try {
       if (mode === "register") {
         if (existingAccount?.exists) {
-          const loggedIn = await login(email, password);
+          const loggedIn = await login(normalizedEmail, password);
           toast.success(`Welcome back, ${loggedIn.display_name || loggedIn.name}`);
           navigateAfterLogin(loggedIn);
           return;
@@ -131,14 +133,14 @@ export default function Login() {
 
         try {
           await apiRegisterDriver({
-            email,
+            email: normalizedEmail,
             password,
             display_name: displayName.trim(),
           });
           toast.success("Account created — signing you in…");
         } catch (err) {
           if (err.status === 409) {
-            const loggedIn = await login(email, password);
+            const loggedIn = await login(normalizedEmail, password);
             toast.success(`Welcome back, ${loggedIn.display_name || loggedIn.name}`);
             navigateAfterLogin(loggedIn);
             return;
@@ -147,7 +149,7 @@ export default function Login() {
         }
       }
 
-      const loggedIn = await login(email, password);
+      const loggedIn = await login(normalizedEmail, password);
       if (mode === "register") {
         toast.success("Account ready — opening your dashboard");
       }
@@ -374,9 +376,9 @@ export default function Login() {
                 </motion.div>
               )}
 
-              {error && (
+              {(error || (authError?.type === "login_failed" && authError.message)) && (
                 <p className="text-sm text-destructive bg-destructive/5 border border-destructive/20 rounded-xl px-3 py-2.5">
-                  {error}
+                  {error || authError.message}
                 </p>
               )}
 

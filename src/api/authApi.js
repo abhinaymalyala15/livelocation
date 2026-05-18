@@ -54,7 +54,10 @@ export async function apiLogin(email, password) {
   const body = await apiFetch(`${API}/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({
+      email: String(email).trim().toLowerCase(),
+      password,
+    }),
   });
   if (!body.token || !body.user) {
     throw new Error("Invalid login response from server");

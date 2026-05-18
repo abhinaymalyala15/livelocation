@@ -23,10 +23,10 @@ const item = {
 export default function StatsCards({ vehicles, tripsToday }) {
   const counts = {
     total: vehicles.length,
-    moving: vehicles.filter((v) => resolveVehicleStatus(v) === "moving").length,
-    idle: vehicles.filter((v) => resolveVehicleStatus(v) === "idle").length,
+    moving: vehicles.filter((v) => resolveVehicleStatus(v, { live: true }) === "moving").length,
+    idle: vehicles.filter((v) => resolveVehicleStatus(v, { live: true }) === "idle").length,
     offline: vehicles.filter((v) => {
-      const s = resolveVehicleStatus(v);
+      const s = resolveVehicleStatus(v, { live: true });
       return s === "offline" || s === "maintenance";
     }).length,
     trips: tripsToday || 0,

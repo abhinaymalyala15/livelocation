@@ -15,7 +15,7 @@ export default function ConnectionIndicator({ connected }) {
         <>
           <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
           <Wifi className="h-3 w-3" />
-          <span className="hidden sm:inline">Live</span>
+          <span>Socket connected</span>
         </>
       ) : (
         <>

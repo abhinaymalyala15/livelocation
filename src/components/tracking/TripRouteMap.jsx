@@ -10,37 +10,13 @@ import MapsUnavailable from './MapsUnavailable';
 import Loader from './Loader';
 import AnimatedVehicleMarker from './AnimatedVehicleMarker';
 import RoutePlaybackControls from './RoutePlaybackControls';
+import { getRouteEndpointIcon, getPlaybackVehicleIcon } from '@/lib/vehicleMapMarker';
 
 const mapContainerStyle = {
   width: '100%',
   height: '100%',
   minHeight: '320px',
   borderRadius: '12px',
-};
-
-const pinPath =
-  'M12.5,0C7,0 2.86,4.19 2.86,9.42C2.86,15.8 12.5,27.5 12.5,27.5C12.5,27.5 22.14,15.8 22.14,9.42C22.14,4.19 18,0 12.5,0ZM12.5,11.7C10.3,11.7 8.5,9.9 8.5,7.7C8.5,5.5 10.3,3.7 12.5,3.7C14.7,3.7 16.5,5.5 16.5,7.7C16.5,9.9 14.7,11.7 12.5,11.7Z';
-
-const startIcon = {
-  path: pinPath,
-  fillColor: '#10b981',
-  fillOpacity: 1,
-  strokeColor: '#ffffff',
-  strokeWeight: 2,
-  scale: 1,
-  anchor: { x: 12, y: 24 },
-};
-
-const endIcon = { ...startIcon, fillColor: '#ef4444' };
-
-const playbackIcon = {
-  path: pinPath,
-  fillColor: '#0ea5e9',
-  fillOpacity: 1,
-  strokeColor: '#ffffff',
-  strokeWeight: 2,
-  scale: 1.25,
-  anchor: { x: 12, y: 24 },
 };
 
 function getDuration(trip) {
@@ -208,8 +184,7 @@ export default function TripRouteMap({ trip, className = '' }) {
               <Marker
                 position={startPoint}
                 title={`Start: ${trip.start_location || 'Departure'}`}
-                icon={startIcon}
-                label={{ text: 'START', color: '#fff', fontSize: '10px', fontWeight: 'bold' }}
+                icon={getRouteEndpointIcon("start")}
               />
             )}
 
@@ -217,15 +192,14 @@ export default function TripRouteMap({ trip, className = '' }) {
               <Marker
                 position={endPoint}
                 title={`End: ${trip.end_location || 'Arrival'}`}
-                icon={endIcon}
-                label={{ text: 'END', color: '#fff', fontSize: '10px', fontWeight: 'bold' }}
+                icon={getRouteEndpointIcon("end")}
               />
             )}
 
             {currentPosition && (playing || playbackPercent > 0) && (
               <AnimatedVehicleMarker
                 position={currentPosition}
-                icon={playbackIcon}
+                icon={getPlaybackVehicleIcon()}
                 title="Playback position"
                 zIndex={2000}
               />

@@ -34,7 +34,7 @@ const statusConfig = {
 export function getStatusConfig(statusOrVehicle) {
   const status =
     typeof statusOrVehicle === "object"
-      ? resolveVehicleStatus(statusOrVehicle)
+      ? resolveVehicleStatus(statusOrVehicle, { live: true })
       : statusConfig[statusOrVehicle]
         ? statusOrVehicle
         : resolveVehicleStatus({ status: statusOrVehicle });
@@ -43,7 +43,11 @@ export function getStatusConfig(statusOrVehicle) {
 
 export default function StatusBadge({ status, vehicle, size = "sm" }) {
   const resolved =
-    vehicle != null ? resolveVehicleStatus(vehicle) : statusConfig[status] ? status : resolveVehicleStatus({ status });
+    vehicle != null
+      ? resolveVehicleStatus(vehicle, { live: true })
+      : statusConfig[status]
+        ? status
+        : resolveVehicleStatus({ status }, { live: true });
   const config = statusConfig[resolved] || statusConfig.offline;
 
   return (

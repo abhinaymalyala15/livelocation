@@ -6,19 +6,16 @@ import DashboardHero from "../components/tracking/DashboardHero";
 import VehicleList from "../components/tracking/VehicleList";
 import MapView from "../components/tracking/MapContainer";
 import Loader from "../components/tracking/Loader";
-import { LastUpdatedText } from "../components/tracking/LiveIndicator";
+import { LastUpdatedText, LiveBadge } from "../components/tracking/LiveIndicator";
+import ConnectionIndicator from "../components/tracking/ConnectionIndicator";
+import VehiclePopup from "../components/tracking/VehiclePopup";
+import useSocketTracking from "@/hooks/useSocketTracking";
+import { computePathDistanceKm, haversineMeters } from "@/lib/geo";
 import { toast } from "sonner";
 import moment from "moment";
 
 function haversineDistance(lat1, lng1, lat2, lng2) {
-  const R = 6371000;
-  const toRad = (d) => (d * Math.PI) / 180;
-  const dLat = toRad(lat2 - lat1);
-  const dLng = toRad(lng2 - lng1);
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return haversineMeters(lat1, lng1, lat2, lng2);
 }
 
 export default function AdminDashboard() {
@@ -27,11 +24,12 @@ export default function AdminDashboard() {
   const [geofenceAlerts, setGeofenceAlerts] = useState([]);
   const geofenceStateRef = useRef({});
   const queryClient = useQueryClient();
+  const socketConnected = useSocketTracking();
 
   const { data: vehicles = [], isLoading, dataUpdatedAt } = useQuery({
     queryKey: ["admin-vehicles"],
     queryFn: () => base44.entities.Vehicle.list("-updated_date"),
-    refetchInterval: 10000,
+    refetchInterval: 5000,
   });
 
   const { data: todayTrips = [] } = useQuery({
@@ -73,7 +71,6 @@ export default function AdminDashboard() {
     };
   }, [selectedVehicle?.id, selectedVehicle?.current_trip_id, selectedVehicle?.status]);
 
-  // Extend green route line as vehicle moves along the road path
   useEffect(() => {
     if (!selectedVehicle || selectedVehicle.status !== "on_trip") return;
     const lat = selectedVehicle.latitude ?? selectedVehicle.current_latitude;
@@ -157,20 +154,42 @@ export default function AdminDashboard() {
 
   const alertedVehicleIds = new Set(geofenceAlerts.map((a) => a.vehicleId));
   const activeCount = vehicles.filter((v) => v.status === "on_trip").length;
+  const selectedTripDistanceKm =
+    tripPath.length >= 2 ? computePathDistanceKm(tripPath) : null;
 
   return (
-    <div className="h-full flex flex-col lg:flex-row">
-      <div className="w-full lg:w-80 xl:w-96 border-b lg:border-b-0 lg:border-r border-border bg-card overflow-auto max-h-[38vh] lg:max-h-none shrink-0 shadow-sm">
-        <VehicleList
-          vehicles={vehicles}
-          selectedVehicleId={selectedVehicle?.id}
-          onSelectVehicle={handleSelectVehicle}
-          alertedVehicleIds={alertedVehicleIds}
-        />
-      </div>
+    <div className="h-full flex flex-col lg:flex-row min-h-0">
+      {/* Left: fleet list + vehicle details (not on the map) */}
+      <aside className="order-2 lg:order-1 w-full lg:w-80 xl:w-96 flex flex-col border-t lg:border-t-0 lg:border-r border-border bg-card shrink-0 shadow-sm min-h-0 max-h-[42vh] lg:max-h-full">
+        <div className="flex-1 min-h-0 overflow-hidden">
+          <VehicleList
+            vehicles={vehicles}
+            selectedVehicleId={selectedVehicle?.id}
+            onSelectVehicle={handleSelectVehicle}
+            alertedVehicleIds={alertedVehicleIds}
+          />
+        </div>
+        {selectedVehicle ? (
+          <div className="shrink-0 border-t border-border bg-muted/20 max-h-[38vh] lg:max-h-[45%] overflow-y-auto">
+            <p className="px-3 pt-2.5 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Selected vehicle
+            </p>
+            <VehiclePopup
+              vehicle={selectedVehicle}
+              tripDistanceKm={selectedTripDistanceKm}
+              compact
+            />
+          </div>
+        ) : (
+          <div className="shrink-0 border-t border-border px-3 py-3 text-xs text-muted-foreground text-center">
+            Select a vehicle to view driver, speed, and trip details
+          </div>
+        )}
+      </aside>
 
-      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-        <div className="p-4 lg:p-5 space-y-4">
+      {/* Right: stats + full map (no overlays) */}
+      <div className="order-1 lg:order-2 flex-1 flex flex-col overflow-hidden min-w-0 min-h-[min(52dvh,560px)] lg:min-h-0">
+        <div className="p-4 lg:p-5 space-y-4 shrink-0">
           <DashboardHero
             activeCount={activeCount}
             totalCount={vehicles.length}
@@ -179,33 +198,30 @@ export default function AdminDashboard() {
           <StatsCards vehicles={vehicles} tripsToday={todayTrips.length} />
         </div>
 
-        <div className="flex-1 px-4 lg:px-5 pb-4 lg:pb-5 relative min-h-[420px]">
-          <div className="h-full min-h-[420px] rounded-2xl overflow-hidden border border-border shadow-lg surface-card ring-1 ring-black/5 map-container-fill">
+        <div className="flex flex-wrap items-center gap-2 px-4 lg:px-5 pb-2 shrink-0">
+          <ConnectionIndicator connected={socketConnected} />
+          <span className="text-[11px] text-muted-foreground">
+            {socketConnected ? "Realtime sync active" : "Reconnecting..."}
+          </span>
+          <LastUpdatedText
+            timestamp={dataUpdatedAt ? new Date(dataUpdatedAt).toISOString() : null}
+            prefix="Fleet"
+            className="font-medium"
+          />
+          {socketConnected && <LiveBadge label="LIVE" />}
+        </div>
+
+        <div className="flex-1 px-4 lg:px-5 pb-4 lg:pb-5 min-h-[min(45dvh,480px)]">
+          <div className="h-full min-h-[min(45dvh,480px)] rounded-2xl overflow-hidden border border-border shadow-lg surface-card ring-1 ring-black/5 map-container-fill">
             <MapView
               vehicles={vehicles}
               selectedVehicle={selectedVehicle}
               onSelectVehicle={handleSelectVehicle}
               tripPath={tripPath}
+              tripDistanceKm={selectedTripDistanceKm}
               geofences={geofences}
               geofenceAlerts={geofenceAlerts}
-            />
-          </div>
-          {selectedVehicle && (
-            <div className="absolute top-3 left-7 z-[500] max-w-[220px] rounded-xl border border-border bg-card/95 backdrop-blur-md px-3 py-2 shadow-md text-xs">
-              <p className="font-semibold truncate">
-                {selectedVehicle.vehicle_name || selectedVehicle.name}
-              </p>
-              <p className="text-muted-foreground truncate">
-                {(selectedVehicle.current_speed ?? selectedVehicle.speed ?? 0).toFixed(0)} km/h
-                {selectedVehicle.current_destination && ` · ${selectedVehicle.current_destination}`}
-              </p>
-            </div>
-          )}
-          <div className="absolute top-3 right-7 z-[500] bg-card/95 backdrop-blur-md border border-border rounded-full px-3 py-1.5 shadow-md">
-            <LastUpdatedText
-              timestamp={dataUpdatedAt ? new Date(dataUpdatedAt).toISOString() : null}
-              prefix="Map"
-              className="font-medium"
+              socketConnected={socketConnected}
             />
           </div>
         </div>

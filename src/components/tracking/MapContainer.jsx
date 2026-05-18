@@ -12,29 +12,8 @@ import { normalizeVehicles } from "@/lib/normalizeVehicle";
 import MapsUnavailable from "./MapsUnavailable";
 import Loader from "./Loader";
 import AnimatedVehicleMarker from "./AnimatedVehicleMarker";
-import { resolveVehicleStatus, statusColors } from "@/lib/vehicleStatus";
-
-function getVehicleMarkerIcon(vehicle, isSelected) {
-  const status = resolveVehicleStatus(vehicle);
-  const color = statusColors[status]?.marker || statusColors.offline.marker;
-  const scale = isSelected ? 1.45 : 1.2;
-  const moving = status === "moving";
-  const heading = vehicle.heading ?? 0;
-
-  return {
-    path: moving
-      ? window.google?.maps?.SymbolPath?.FORWARD_CLOSED_ARROW ??
-        "M12.5,0C7,0 2.86,4.19 2.86,9.42C2.86,15.8 12.5,27.5 12.5,27.5C12.5,27.5 22.14,15.8 22.14,9.42C22.14,4.19 18,0 12.5,0ZM12.5,11.7C10.3,11.7 8.5,9.9 8.5,7.7C8.5,5.5 10.3,3.7 12.5,3.7C14.7,3.7 16.5,5.5 16.5,7.7C16.5,9.9 14.7,11.7 12.5,11.7Z"
-      : "M12.5,0C7,0 2.86,4.19 2.86,9.42C2.86,15.8 12.5,27.5 12.5,27.5C12.5,27.5 22.14,15.8 22.14,9.42C22.14,4.19 18,0 12.5,0ZM12.5,11.7C10.3,11.7 8.5,9.9 8.5,7.7C8.5,5.5 10.3,3.7 12.5,3.7C14.7,3.7 16.5,5.5 16.5,7.7C16.5,9.9 14.7,11.7 12.5,11.7Z",
-    fillColor: color,
-    fillOpacity: 1,
-    strokeColor: isSelected ? "#0d9488" : "white",
-    strokeWeight: isSelected ? 3 : 2,
-    scale: moving ? (isSelected ? 5 : 4) : scale,
-    rotation: moving ? heading : 0,
-    anchor: moving ? { x: 0, y: 0 } : { x: 12, y: 24 },
-  };
-}
+import { resolveVehicleStatus } from "@/lib/vehicleStatus";
+import { getVehicleMapMarkerIcon } from "@/lib/vehicleMapMarker";
 
 const mapOptions = {
   ...defaultMapOptions,
@@ -46,8 +25,10 @@ export default function MapView({
   selectedVehicle,
   onSelectVehicle,
   tripPath = [],
+  tripDistanceKm = null,
   geofences = [],
   geofenceAlerts = [],
+  socketConnected = true,
 }) {
   const mapRef = useRef(null);
   const panRafRef = useRef(null);
@@ -143,6 +124,7 @@ export default function MapView({
     selectedVehicle?.id,
     selectedVehicle?.latitude,
     selectedVehicle?.longitude,
+    selectedVehicle?.last_location_update,
     smoothPanTo,
   ]);
 
@@ -221,8 +203,27 @@ export default function MapView({
         </>
       )}
 
+      {selectedVehicle?.latitude != null && selectedVehicle?.longitude != null && (
+        <Circle
+          center={{
+            lat: selectedVehicle.latitude ?? selectedVehicle.current_latitude,
+            lng: selectedVehicle.longitude ?? selectedVehicle.current_longitude,
+          }}
+          radius={45}
+          options={{
+            strokeColor: "#0d9488",
+            strokeOpacity: 0.55,
+            strokeWeight: 2,
+            fillColor: "#0d9488",
+            fillOpacity: 0.1,
+            clickable: false,
+            zIndex: 0,
+          }}
+        />
+      )}
+
       {activeVehicles.map((vehicle) => {
-        const displayStatus = resolveVehicleStatus(vehicle);
+        const displayStatus = resolveVehicleStatus(vehicle, { live: true });
         const isSelected = selectedVehicle?.id === vehicle.id;
         const name = vehicle.vehicle_name || vehicle.name || "Vehicle";
 
@@ -231,7 +232,7 @@ export default function MapView({
             key={vehicle.id}
             position={{ lat: vehicle.latitude, lng: vehicle.longitude }}
             title={`${name} · ${displayStatus}`}
-            icon={getVehicleMarkerIcon(vehicle, isSelected)}
+            icon={getVehicleMapMarkerIcon(vehicle, { selected: isSelected })}
             zIndex={isSelected ? 1000 : displayStatus === "moving" ? 100 : 1}
             onClick={() => handleMarkerClick(vehicle)}
           />

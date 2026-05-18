@@ -8,6 +8,7 @@ import {
   mapContainerStyle,
   triggerMapResize,
 } from "@/lib/mapConfig";
+import { getVehicleMapMarkerIcon } from "@/lib/vehicleMapMarker";
 import MapsUnavailable from "@/components/tracking/MapsUnavailable";
 import Loader from "@/components/tracking/Loader";
 import { Gauge } from "lucide-react";
@@ -15,7 +16,7 @@ import moment from "moment";
 
 const mapOptions = { ...defaultMapOptions, gestureHandling: "greedy" };
 
-export default function DriverLiveMap({ position, tripPath = [], tracking }) {
+export default function DriverLiveMap({ position, tripPath = [], tracking, className = "" }) {
   const mapRef = useRef(null);
   const { isLoaded, isConfigured, loadError } = useGoogleMaps();
 
@@ -40,17 +41,12 @@ export default function DriverLiveMap({ position, tripPath = [], tracking }) {
   }, [position?.latitude, position?.longitude]);
 
   const markerIcon = useMemo(() => {
-    if (!window.google?.maps) return undefined;
-    return {
-      path: window.google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
-      scale: 5,
-      fillColor: "#0d9488",
-      fillOpacity: 1,
-      strokeColor: "#fff",
-      strokeWeight: 2,
-      rotation: position?.heading ?? 0,
-    };
-  }, [position?.heading, isLoaded]);
+    if (!position || !isLoaded) return undefined;
+    return getVehicleMapMarkerIcon(
+      { heading: position.heading ?? 0, status: "on_trip", current_speed: position.speed ?? 0 },
+      { selected: true, driver: true }
+    );
+  }, [position?.heading, position?.speed, isLoaded]);
 
   if (!isConfigured) return <MapsUnavailable />;
   if (loadError) {
@@ -75,8 +71,7 @@ export default function DriverLiveMap({ position, tripPath = [], tracking }) {
     <motion.section
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="relative rounded-xl border border-border overflow-hidden bg-muted/30"
-      style={{ height: "min(420px, 55vh)" }}
+      className={`relative border border-border overflow-hidden bg-muted/30 h-full min-h-[280px] ${className}`}
     >
       <GoogleMap
         mapContainerStyle={{ ...mapContainerStyle, minHeight: "100%", height: "100%" }}

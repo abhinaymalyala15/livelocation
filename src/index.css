@@ -65,6 +65,18 @@
   .input-professional {
     @apply h-10 bg-background border-border/80 focus-visible:ring-primary/30;
   }
+  .safe-top {
+    padding-top: max(0.5rem, env(safe-area-inset-top));
+  }
+  .touch-target {
+    @apply min-h-11 min-w-11;
+  }
+}
+
+html,
+body,
+#root {
+  min-height: 100dvh;
 }
 
 ::-webkit-scrollbar {

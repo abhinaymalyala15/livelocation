@@ -5,9 +5,13 @@ const API_BASE = "/api";
 
 let dbAvailable = null;
 
+function fetchWithTimeout(url, options = {}, ms = 15000) {
+  return fetch(url, { ...options, signal: AbortSignal.timeout(ms) });
+}
+
 export async function checkDatabaseHealth() {
   try {
-    const res = await fetch(`${API_BASE}/health`, { signal: AbortSignal.timeout(3000) });
+    const res = await fetchWithTimeout(`${API_BASE}/health`, {}, 5000);
     if (!res.ok) return false;
     const body = await res.json();
     dbAvailable = !!body.ok;
@@ -35,7 +39,7 @@ export async function loadFleetData(options = {}) {
   if (online) {
     dbAvailable = true;
     try {
-      const res = await fetch(`${API_BASE}/data`);
+      const res = await fetchWithTimeout(`${API_BASE}/data`, {}, 20000);
       if (res.ok) {
         const data = await res.json();
         const hasFleet =

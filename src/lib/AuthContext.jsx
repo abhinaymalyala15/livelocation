@@ -1,8 +1,6 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { setAuthToken } from '@/api/authApi';
-import { reloadFleetData } from '@/api/persist';
-
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
@@ -43,18 +41,24 @@ export const AuthProvider = ({ children }) => {
     setIsLoadingAuth(true);
     setAuthError(null);
     try {
-      const currentUser = await base44.auth.login(email, password);
-      await reloadFleetData();
+      const trimmedEmail = String(email).trim().toLowerCase();
+      const currentUser = await base44.auth.login(trimmedEmail, password);
       setUser(currentUser);
       setIsAuthenticated(true);
       setAuthChecked(true);
+      setAuthError(null);
       return currentUser;
     } catch (error) {
+      const message =
+        error?.message ||
+        (error?.status === 401 ? 'Invalid email or password' : 'Sign in failed');
       setAuthError({
         type: 'login_failed',
-        message: 'Invalid credentials',
+        message,
       });
-      throw error;
+      const err = error instanceof Error ? error : new Error(message);
+      err.status = error?.status;
+      throw err;
     } finally {
       setIsLoadingAuth(false);
     }

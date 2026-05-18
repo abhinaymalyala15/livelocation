@@ -18,6 +18,8 @@ import {
 } from "@/components/ui/select";
 import DriverShell from "@/components/driver/DriverShell";
 import DriverHeader from "@/components/driver/DriverHeader";
+import DriverLiveStatusBar from "@/components/driver/DriverLiveStatusBar";
+import LiveDistanceHero from "@/components/driver/LiveDistanceHero";
 import DriverInfoCard from "@/components/driver/DriverInfoCard";
 import DriverLiveMap from "@/components/driver/DriverLiveMap";
 import TripControls from "@/components/driver/TripControls";
@@ -67,6 +69,7 @@ export default function DriverDashboard() {
     error: geoError,
     permissionDenied,
     lastSentAt,
+    lastFixAt,
   } = useLiveTracking({
     enabled: trackingEnabled,
     driverId: user?.email,
@@ -223,18 +226,28 @@ export default function DriverDashboard() {
       onNav={setSection}
       onLogout={handleLogout}
     >
+      <DriverLiveStatusBar
+        tripActive={tripStatus === "active" || tripStatus === "paused"}
+        gpsActive={gpsOk}
+        socketConnected={socketConnected && !offline}
+        lastFixAt={lastFixAt || lastSentAt}
+        className="md:hidden sticky top-0 z-20"
+      />
+
       <DriverHeader
         tripStatus={tripStatus}
         gpsActive={gpsOk}
         socketConnected={socketConnected && !offline}
+        lastFixAt={lastFixAt || lastSentAt}
         userName={user.display_name || user.name}
       />
 
       <motion.main
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        className="flex-1 p-4 md:p-6 space-y-4 max-w-6xl mx-auto w-full"
+        className="flex-1 flex flex-col p-0 md:p-6 md:space-y-4 max-w-6xl mx-auto w-full min-h-0"
       >
+        <div className="px-4 md:px-0 space-y-4 md:space-y-4 pt-3 md:pt-0">
         {offline && tripStatus === "active" && (
           <motion.div className="rounded-lg border border-amber-300 bg-amber-50 text-amber-900 px-4 py-2 text-sm">
             Connection or GPS weak — trying to reconnect…
@@ -249,19 +262,34 @@ export default function DriverDashboard() {
           </motion.div>
         )}
 
-        <DriverInfoCard
-          user={user}
-          vehicle={selectedVehicle}
-          tripStatus={tripStatus}
-        />
+        <div className="hidden md:block">
+          <DriverInfoCard
+            user={user}
+            vehicle={selectedVehicle}
+            tripStatus={tripStatus}
+          />
+        </div>
 
         <motion.div className="grid lg:grid-cols-3 gap-4">
           <motion.div className="lg:col-span-2 space-y-4">
-            <DriverLiveMap
-              position={position}
-              tripPath={tripPath}
-              tracking={trackingEnabled}
-            />
+            <div className="relative -mx-4 md:mx-0 min-h-[min(52dvh,420px)] md:min-h-[420px]">
+              <DriverLiveMap
+                position={position}
+                tripPath={tripPath}
+                tracking={trackingEnabled}
+                className="absolute inset-0 rounded-none md:rounded-xl"
+              />
+              {trackingEnabled && (
+                <div className="absolute bottom-4 left-4 right-4 z-10 md:max-w-md">
+                  <LiveDistanceHero
+                    distanceKm={distanceKm}
+                    speed={position?.speed}
+                    lastFixAt={lastFixAt || lastSentAt}
+                    tracking={trackingEnabled}
+                  />
+                </div>
+              )}
+            </div>
 
             <motion.div className="grid sm:grid-cols-2 gap-4">
               <motion.div className="surface-card rounded-xl border border-border p-4 space-y-3">
@@ -303,7 +331,15 @@ export default function DriverDashboard() {
             </motion.div>
           </motion.div>
 
-          <motion.div className="space-y-4">
+          <motion.div className="space-y-4 px-4 md:px-0 pb-6 md:pb-0">
+            <div className="hidden lg:block">
+              <LiveDistanceHero
+                distanceKm={distanceKm}
+                speed={position?.speed}
+                lastFixAt={lastFixAt || lastSentAt}
+                tracking={trackingEnabled}
+              />
+            </div>
             <TripStats
               distanceKm={distanceKm}
               speed={position?.speed}
@@ -324,6 +360,7 @@ export default function DriverDashboard() {
             />
           </motion.div>
         </motion.div>
+        </div>
       </motion.main>
     </DriverShell>
   );

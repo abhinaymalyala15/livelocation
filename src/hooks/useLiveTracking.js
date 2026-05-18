@@ -21,14 +21,18 @@ export default function useLiveTracking({
   const [lastSentAt, setLastSentAt] = useState(null);
 
   const lastSentRef = useRef(null);
+  const lastUiRef = useRef(null);
   const watchIdRef = useRef(null);
+  const [lastFixAt, setLastFixAt] = useState(null);
   const onEventRef = useRef(onEvent);
   onEventRef.current = onEvent;
 
   const resetPath = useCallback(() => {
     lastSentRef.current = null;
+    lastUiRef.current = null;
     setTripPath([]);
     setDistanceKm(0);
+    setLastFixAt(null);
   }, []);
 
   const processFix = useCallback(
@@ -43,20 +47,26 @@ export default function useLiveTracking({
       };
 
       setPosition(coords);
+      setLastFixAt(coords.timestamp);
+
+      if (enabled && vehicleId) {
+        const uiPrev = lastUiRef.current;
+        if (uiPrev) {
+          const uiMeters = haversineMeters(
+            uiPrev.latitude,
+            uiPrev.longitude,
+            coords.latitude,
+            coords.longitude
+          );
+          if (uiMeters >= 2) {
+            setDistanceKm((d) => d + uiMeters / 1000);
+          }
+        }
+        lastUiRef.current = coords;
+      }
 
       if (!enabled || !vehicleId) return;
       if (!shouldSendLocationUpdate(lastSentRef.current, coords)) return;
-
-      const prev = lastSentRef.current;
-      if (prev) {
-        const meters = haversineMeters(
-          prev.latitude,
-          prev.longitude,
-          coords.latitude,
-          coords.longitude
-        );
-        setDistanceKm((d) => d + meters / 1000);
-      }
 
       setTripPath((path) => [
         ...path,
@@ -128,6 +138,7 @@ export default function useLiveTracking({
     error,
     permissionDenied,
     lastSentAt,
+    lastFixAt,
     resetPath,
   };
 }

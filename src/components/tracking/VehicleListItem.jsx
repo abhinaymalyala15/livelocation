@@ -5,7 +5,7 @@ import { resolveVehicleStatus, statusColors } from "@/lib/vehicleStatus";
 import { LastUpdatedText } from "./LiveIndicator";
 
 export default function VehicleListItem({ vehicle, isSelected, isAlerted, onClick }) {
-  const displayStatus = resolveVehicleStatus(vehicle);
+  const displayStatus = resolveVehicleStatus(vehicle, { live: true });
   const colors = statusColors[displayStatus] || statusColors.offline;
   const plate = vehicle.vehicle_unique_id || vehicle.plate;
 

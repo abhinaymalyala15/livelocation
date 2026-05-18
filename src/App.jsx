@@ -75,17 +75,22 @@ function App() {
     <ErrorBoundary>
       <AuthProvider>
         <QueryClientProvider client={queryClientInstance}>
-          <FleetDataLoader>
           <GoogleMapsProvider>
             <Router>
               <Routes>
                 <Route path="/login" element={<Login />} />
-                <Route path="/*" element={<AuthenticatedApp />} />
+                <Route
+                  path="/*"
+                  element={
+                    <FleetDataLoader>
+                      <AuthenticatedApp />
+                    </FleetDataLoader>
+                  }
+                />
               </Routes>
             </Router>
             <Toaster position="top-right" richColors closeButton />
           </GoogleMapsProvider>
-          </FleetDataLoader>
         </QueryClientProvider>
       </AuthProvider>
     </ErrorBoundary>
