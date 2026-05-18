@@ -17,7 +17,7 @@ const mapOptions = { ...defaultMapOptions, gestureHandling: "greedy" };
 
 export default function DriverLiveMap({ position, tripPath = [], tracking }) {
   const mapRef = useRef(null);
-  const { isLoaded, isConfigured } = useGoogleMaps();
+  const { isLoaded, isConfigured, loadError } = useGoogleMaps();
 
   const center = useMemo(() => {
     if (position) return { lat: position.latitude, lng: position.longitude };
@@ -53,6 +53,22 @@ export default function DriverLiveMap({ position, tripPath = [], tracking }) {
   }, [position?.heading, isLoaded]);
 
   if (!isConfigured) return <MapsUnavailable />;
+  if (loadError) {
+    return (
+      <section
+        className="rounded-xl border border-destructive/30 bg-destructive/5 flex items-center justify-center min-h-[280px] p-6 text-center"
+        style={{ height: "min(420px, 55vh)" }}
+      >
+        <motion.div className="space-y-2 max-w-md">
+          <p className="font-semibold text-destructive">Map failed to load</p>
+          <p className="text-sm text-muted-foreground">{loadError.message}</p>
+          <p className="text-xs text-muted-foreground">
+            Enable Maps JavaScript API and check API key restrictions in Google Cloud Console.
+          </p>
+        </motion.div>
+      </section>
+    );
+  }
   if (!isLoaded) return <Loader text="Loading map..." />;
 
   return (

@@ -115,6 +115,14 @@ export function updateDisplayName(email, display_name) {
   return user;
 }
 
+export function lookupUserByEmail(email) {
+  const trimmedEmail = String(email).trim().toLowerCase();
+  if (!trimmedEmail) return { exists: false };
+  const row = db.prepare("SELECT * FROM users WHERE email = ?").get(trimmedEmail);
+  if (!row) return { exists: false };
+  return { exists: true, user: toPublicUser(row) };
+}
+
 export function listUsers(role = null) {
   if (role) {
     return db

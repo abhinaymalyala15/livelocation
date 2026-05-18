@@ -21,6 +21,7 @@ async function parseJson(res) {
   if (!res.ok) {
     const err = new Error(body.error || body.message || `Request failed (${res.status})`);
     err.status = res.status;
+    err.body = body;
     throw err;
   }
   return body;
@@ -60,6 +61,18 @@ export async function apiLogin(email, password) {
   }
   setAuthToken(body.token);
   return body.user;
+}
+
+export async function apiLookupUser(email) {
+  const trimmed = String(email || "").trim().toLowerCase();
+  if (!trimmed) return { exists: false };
+  try {
+    const res = await fetch(`/api/auth/lookup?email=${encodeURIComponent(trimmed)}`);
+    if (!res.ok) return { exists: false };
+    return res.json();
+  } catch {
+    return { exists: false };
+  }
 }
 
 export async function apiRegisterDriver({ email, password, display_name }) {

@@ -20,6 +20,7 @@ import {
   getUserByToken,
   updateDisplayName,
   listUsers,
+  lookupUserByEmail,
 } from "./auth.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -43,6 +44,34 @@ app.post("/api/auth/register", (req, res) => {
   } catch (e) {
     res.status(e.status || 500).json({ error: e.message });
   }
+});
+
+app.get("/api/auth/lookup", (req, res) => {
+  const result = lookupUserByEmail(req.query.email);
+  if (!result.exists) return res.json({ exists: false });
+
+  const fleet = { vehicles: [], activeTrips: 0, locationLogCount: 0 };
+  if (result.user.role === "driver") {
+    const debug = getDriverDebug(result.user.email);
+    const data = getSnapshot();
+    fleet.vehicles = (data?.vehicles || [])
+      .filter(
+        (v) =>
+          String(v.driver_email || "")
+            .trim()
+            .toLowerCase() === result.user.email
+      )
+      .map((v) => ({
+        id: v.id,
+        vehicle_name: v.vehicle_name || v.name,
+        plate: v.vehicle_unique_id || v.plate,
+        status: v.status,
+      }));
+    fleet.activeTrips = debug.activeTrips ?? 0;
+    fleet.locationLogCount = debug.locationLogCount ?? 0;
+  }
+
+  res.json({ exists: true, user: result.user, fleet });
 });
 
 app.post("/api/auth/login", (req, res) => {
