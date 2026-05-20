@@ -1,6 +1,6 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
-import { setAuthToken } from '@/api/authApi';
+import { setAuthToken, apiLoginDriver } from '@/api/authApi';
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
@@ -37,12 +37,13 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const login = async (email, password) => {
+  const login = async (identifier, password, { asDriver = false } = {}) => {
     setIsLoadingAuth(true);
     setAuthError(null);
     try {
-      const trimmedEmail = String(email).trim().toLowerCase();
-      const currentUser = await base44.auth.login(trimmedEmail, password);
+      const currentUser = asDriver
+        ? await apiLoginDriver(identifier, password)
+        : await base44.auth.login(String(identifier).trim().toLowerCase(), password);
       setUser(currentUser);
       setIsAuthenticated(true);
       setAuthChecked(true);
@@ -51,7 +52,11 @@ export const AuthProvider = ({ children }) => {
     } catch (error) {
       const message =
         error?.message ||
-        (error?.status === 401 ? 'Invalid email or password' : 'Sign in failed');
+        (error?.status === 401
+          ? asDriver
+            ? 'Invalid name or password'
+            : 'Invalid email or password'
+          : 'Sign in failed');
       setAuthError({
         type: 'login_failed',
         message,

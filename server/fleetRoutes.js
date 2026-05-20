@@ -70,6 +70,23 @@ export function createFleetRouter({ broadcastLocation } = {}) {
   });
 
   router.post("/vehicles", (req, res) => {
+    if (req.user.role === "driver") {
+      const email = req.user.email;
+      const body = {
+        ...req.body,
+        driver_email: email,
+        driver_id: req.user.id,
+        driver_name: req.body.driver_name || req.user.display_name || req.user.name,
+      };
+      if (
+        req.body.driver_email &&
+        String(req.body.driver_email).trim().toLowerCase() !== email
+      ) {
+        return res.status(403).json({ error: "Cannot assign a vehicle to another driver" });
+      }
+      const vehicle = createVehicle(body);
+      return res.status(201).json(vehicle);
+    }
     if (req.user.role !== "admin") return res.status(403).json({ error: "Admin only" });
     const vehicle = createVehicle(req.body);
     res.status(201).json(vehicle);

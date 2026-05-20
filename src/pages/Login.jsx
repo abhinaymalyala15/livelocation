@@ -1,10 +1,9 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Map, Shield, Route, Eye, EyeOff, Mail, Lock, Navigation, User, CheckCircle2 } from "lucide-react";
-import { toast } from "sonner";
+import { Map, Shield, Route, Eye, EyeOff, Mail, Lock, Navigation, User } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
-import { apiRegisterDriver, apiLookupUser, checkApiHealth } from "@/api/authApi";
+import { checkApiHealth } from "@/api/authApi";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,30 +19,18 @@ const fadeUp = {
   }),
 };
 
-function isValidEmail(value) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value).trim());
-}
-
 export default function Login() {
-  const [mode, setMode] = useState("login");
+  const [roleTab, setRoleTab] = useState("driver");
+  const [driverName, setDriverName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [displayName, setDisplayName] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [apiOk, setApiOk] = useState(null);
-  const [existingAccount, setExistingAccount] = useState(null);
-  const [lookingUp, setLookingUp] = useState(false);
-  const lookupRequestRef = useRef(0);
   const { login, isAuthenticated, user, isLoadingAuth, authError } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-
-  const resetExistingLookup = useCallback(() => {
-    setExistingAccount(null);
-    setDisplayName("");
-  }, []);
 
   useEffect(() => {
     checkApiHealth().then(setApiOk).catch(() => setApiOk(false));
@@ -56,52 +43,7 @@ export default function Login() {
       else if (user.role === "admin") navigate("/admin", { replace: true });
       else navigate("/driver", { replace: true });
     }
-  }, [isAuthenticated, isLoadingAuth, user, navigate, searchParams]);
-
-  const checkExistingAccount = useCallback(async () => {
-    if (mode !== "register" || !isValidEmail(email) || password.length < 4) {
-      if (mode === "register" && !isValidEmail(email)) resetExistingLookup();
-      return;
-    }
-
-    const requestId = ++lookupRequestRef.current;
-    setLookingUp(true);
-    setError("");
-
-    try {
-      const result = await apiLookupUser(email.trim().toLowerCase());
-      if (requestId !== lookupRequestRef.current) return;
-
-      if (result.exists && result.user) {
-        setExistingAccount(result);
-        setDisplayName(result.user.display_name || result.user.name || "");
-      } else {
-        setExistingAccount(null);
-      }
-    } catch {
-      if (requestId === lookupRequestRef.current) setExistingAccount(null);
-    } finally {
-      if (requestId === lookupRequestRef.current) setLookingUp(false);
-    }
-  }, [mode, email, password, displayName, resetExistingLookup]);
-
-  useEffect(() => {
-    if (mode !== "register") return undefined;
-    const timer = setTimeout(checkExistingAccount, 400);
-    return () => clearTimeout(timer);
-  }, [mode, email, password, checkExistingAccount]);
-
-  const handleEmailChange = (value) => {
-    setEmail(value);
-    setError("");
-    if (mode === "register") resetExistingLookup();
-  };
-
-  const handleModeChange = (next) => {
-    setMode(next);
-    setError("");
-    resetExistingLookup();
-  };
+  }, [isAuthenticated, isLoadingAuth, user, navigate, searchParams, submitting]);
 
   const navigateAfterLogin = (loggedIn) => {
     const returnTo = searchParams.get("return");
@@ -110,64 +52,32 @@ export default function Login() {
     else navigate("/driver", { replace: true });
   };
 
-  const normalizedEmail = email.trim().toLowerCase();
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
     setSubmitting(true);
     try {
-      if (mode === "register") {
-        if (existingAccount?.exists) {
-          const loggedIn = await login(normalizedEmail, password);
-          toast.success(`Welcome back, ${loggedIn.display_name || loggedIn.name}`);
-          navigateAfterLogin(loggedIn);
-          return;
-        }
-
-        if (!displayName.trim()) {
-          setError("Enter your display name");
-          setSubmitting(false);
-          return;
-        }
-
-        try {
-          await apiRegisterDriver({
-            email: normalizedEmail,
-            password,
-            display_name: displayName.trim(),
-          });
-          toast.success("Account created — signing you in…");
-        } catch (err) {
-          if (err.status === 409) {
-            const loggedIn = await login(normalizedEmail, password);
-            toast.success(`Welcome back, ${loggedIn.display_name || loggedIn.name}`);
-            navigateAfterLogin(loggedIn);
-            return;
-          }
-          throw err;
-        }
-      }
-
-      const loggedIn = await login(normalizedEmail, password);
-      if (mode === "register") {
-        toast.success("Account ready — opening your dashboard");
-      }
+      const loggedIn =
+        roleTab === "driver"
+          ? await login(driverName.trim(), password, { asDriver: true })
+          : await login(email.trim().toLowerCase(), password);
       navigateAfterLogin(loggedIn);
     } catch (err) {
-      if (existingAccount?.exists) {
-        setError("Wrong password for this account. Try again or use Sign in.");
-      } else {
-        setError(err.message || "Sign in failed. Check email and password.");
-      }
+      setError(
+        err.message ||
+          (roleTab === "driver"
+            ? "Invalid name or password. Ask admin for your login."
+            : "Invalid email or password.")
+      );
     } finally {
       setSubmitting(false);
     }
   };
 
-  const fleetSummary = existingAccount?.fleet;
-  const vehicleLabel = fleetSummary?.vehicles?.[0]?.vehicle_name;
-  const isExistingDriver = mode === "register" && existingAccount?.exists;
+  const handleTabChange = (tab) => {
+    setRoleTab(tab);
+    setError("");
+  };
 
   return (
     <motion.div className="min-h-screen flex">
@@ -192,7 +102,7 @@ export default function Login() {
             Track every kilometre across Hyderabad.
           </h1>
           <p className="text-white/55 text-sm leading-relaxed">
-            Hitech City to RGIA — live maps, trip playback, geofences, and real driver GPS data.
+            Admin creates driver accounts. Drivers sign in with the name and password from the admin panel.
           </p>
           <ul className="grid gap-3 text-sm text-white/80">
             {[
@@ -233,52 +143,84 @@ export default function Login() {
           <motion.div className="surface-card p-7 sm:p-8 space-y-6 shadow-xl border-border/80 ring-1 ring-black/[0.03]">
             {apiOk === false && (
               <motion.div className="rounded-lg border border-amber-300 bg-amber-50 text-amber-900 px-3 py-2 text-sm">
-                API server is offline. In the project folder run{" "}
-                <code className="font-mono text-xs">npm run dev</code>, then open{" "}
+                API server is offline. Run <code className="font-mono text-xs">npm run dev</code>, then open{" "}
                 <code className="font-mono text-xs">http://127.0.0.1:5173</code>.
               </motion.div>
             )}
+
             <motion.div className="space-y-1">
-              <h2 className="text-2xl font-semibold tracking-tight">
-                {mode === "login" ? "Sign in" : isExistingDriver ? "Welcome back" : "Driver registration"}
-              </h2>
+              <h2 className="text-2xl font-semibold tracking-tight">Sign in</h2>
               <p className="text-sm text-muted-foreground">
-                {mode === "login"
-                  ? "Admin or driver account"
-                  : isExistingDriver
-                    ? "Your saved profile and trips will open after you continue"
-                    : "Your name will appear on the admin dashboard"}
+                {roleTab === "driver"
+                  ? "Use the name and password your admin created"
+                  : "Fleet administrator account"}
               </p>
             </motion.div>
 
             <motion.div className="grid grid-cols-2 gap-2 p-1 bg-muted rounded-lg">
-              <Button type="button" variant={mode === "login" ? "default" : "ghost"} size="sm" onClick={() => handleModeChange("login")}>
-                Sign in
+              <Button
+                type="button"
+                variant={roleTab === "driver" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => handleTabChange("driver")}
+              >
+                Driver
               </Button>
-              <Button type="button" variant={mode === "register" ? "default" : "ghost"} size="sm" onClick={() => handleModeChange("register")}>
-                New driver
+              <Button
+                type="button"
+                variant={roleTab === "admin" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => handleTabChange("admin")}
+              >
+                Admin
               </Button>
             </motion.div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
-              <motion.div className="space-y-2">
-                <Label htmlFor="email" className="text-xs font-medium text-muted-foreground">
-                  Email
-                </Label>
-                <motion.div className="relative group">
-                  <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-                  <Input
-                    id="email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => handleEmailChange(e.target.value)}
-                    onBlur={mode === "register" ? checkExistingAccount : undefined}
-                    className="h-12 pl-10 rounded-xl border-border/80 bg-muted/30 focus-visible:ring-primary/25 focus-visible:border-primary/50"
-                    required
-                    autoComplete="email"
-                  />
+              {roleTab === "driver" ? (
+                <motion.div className="space-y-2">
+                  <Label htmlFor="driverName" className="text-xs font-medium text-muted-foreground">
+                    Your name
+                  </Label>
+                  <motion.div className="relative group">
+                    <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                    <Input
+                      id="driverName"
+                      type="text"
+                      value={driverName}
+                      onChange={(e) => {
+                        setDriverName(e.target.value);
+                        setError("");
+                      }}
+                      className="h-12 pl-10 rounded-xl border-border/80 bg-muted/30 focus-visible:ring-primary/25 focus-visible:border-primary/50"
+                      placeholder="e.g. Rahul Sharma"
+                      required
+                      autoComplete="username"
+                    />
+                  </motion.div>
                 </motion.div>
-              </motion.div>
+              ) : (
+                <motion.div className="space-y-2">
+                  <Label htmlFor="email" className="text-xs font-medium text-muted-foreground">
+                    Email
+                  </Label>
+                  <motion.div className="relative group">
+                    <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                    <Input
+                      id="email"
+                      type="email"
+                      value={email}
+                      onChange={(e) => {
+                        setEmail(e.target.value);
+                        setError("");
+                      }}
+                      className="h-12 pl-10 rounded-xl border-border/80 bg-muted/30 focus-visible:ring-primary/25 focus-visible:border-primary/50"
+                      required
+                      autoComplete="email"
+                    />
+                  </motion.div>
+                </motion.div>
+              )}
 
               <motion.div className="space-y-2">
                 <Label htmlFor="password" className="text-xs font-medium text-muted-foreground">
@@ -294,12 +236,10 @@ export default function Login() {
                       setPassword(e.target.value);
                       setError("");
                     }}
-                    onBlur={mode === "register" ? checkExistingAccount : undefined}
                     className="h-12 pl-10 pr-11 rounded-xl border-border/80 bg-muted/30 focus-visible:ring-primary/25"
-                    placeholder={mode === "register" && !isExistingDriver ? "Choose a password" : "Password"}
                     required
                     minLength={4}
-                    autoComplete={mode === "register" && !isExistingDriver ? "new-password" : "current-password"}
+                    autoComplete="current-password"
                   />
                   <button
                     type="button"
@@ -312,95 +252,23 @@ export default function Login() {
                 </motion.div>
               </motion.div>
 
-              {mode === "register" && isExistingDriver && (
-                <motion.div
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-900 px-3 py-3 text-sm space-y-1.5"
-                >
-                  <p className="flex items-center gap-2 font-medium">
-                    <CheckCircle2 className="h-4 w-4 shrink-0" />
-                    Account found — saved data ready
-                  </p>
-                  <p>
-                    Name: <strong>{displayName}</strong>
-                    {vehicleLabel ? (
-                      <>
-                        {" "}
-                        · Vehicle: <strong>{vehicleLabel}</strong>
-                      </>
-                    ) : null}
-                  </p>
-                  {(fleetSummary?.activeTrips > 0 || fleetSummary?.locationLogCount > 0) && (
-                    <p className="text-xs text-emerald-800/90">
-                      {fleetSummary.activeTrips > 0 && `${fleetSummary.activeTrips} active trip`}
-                      {fleetSummary.activeTrips > 0 && fleetSummary.locationLogCount > 0 && " · "}
-                      {fleetSummary.locationLogCount > 0 &&
-                        `${fleetSummary.locationLogCount} GPS points saved`}
-                    </p>
-                  )}
-                  <p className="text-xs text-emerald-800/80">
-                    Continue with your password to open your driver dashboard.
-                  </p>
-                </motion.div>
-              )}
-
-              {mode === "register" && !isExistingDriver && (
-                <motion.div className="space-y-2" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                  <Label htmlFor="displayName">Your name (shown to admin) *</Label>
-                  <motion.div className="relative">
-                    <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="displayName"
-                      value={displayName}
-                      onChange={(e) => setDisplayName(e.target.value)}
-                      className="h-12 pl-10 rounded-xl"
-                      placeholder="e.g. Rahul Sharma"
-                      required={!isExistingDriver}
-                      disabled={lookingUp}
-                    />
-                  </motion.div>
-                </motion.div>
-              )}
-
-              {mode === "register" && isExistingDriver && (
-                <motion.div className="space-y-2">
-                  <Label htmlFor="displayNameExisting">Your name (saved)</Label>
-                  <motion.div className="relative">
-                    <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="displayNameExisting"
-                      value={displayName}
-                      readOnly
-                      className="h-12 pl-10 rounded-xl bg-muted/50"
-                    />
-                  </motion.div>
-                </motion.div>
-              )}
-
               {(error || (authError?.type === "login_failed" && authError.message)) && (
                 <p className="text-sm text-destructive bg-destructive/5 border border-destructive/20 rounded-xl px-3 py-2.5">
                   {error || authError.message}
                 </p>
               )}
 
-              <Button type="submit" className="w-full h-12 rounded-xl font-semibold text-base shadow-md" disabled={submitting || lookingUp}>
-                {submitting
-                  ? "Please wait…"
-                  : mode === "login"
-                    ? "Sign in"
-                    : isExistingDriver
-                      ? "Open my account"
-                      : "Create driver account"}
+              <Button type="submit" className="w-full h-12 rounded-xl font-semibold text-base shadow-md" disabled={submitting}>
+                {submitting ? "Please wait…" : "Sign in"}
               </Button>
             </form>
           </motion.div>
 
           <p className="text-xs text-center text-muted-foreground mt-6 leading-relaxed">
-            <span className="block font-medium text-foreground/80 mb-1">Admin login</span>
+            <span className="block font-medium text-foreground/80 mb-1">Admin</span>
             admin@fleet.com / admin123
             <span className="block font-medium text-foreground/80 mt-3 mb-1">Drivers</span>
-            Enter <strong>email</strong> and <strong>password</strong> first. If you already registered, your saved name and trips load automatically.
+            Name and password must match what admin entered under <strong>Drivers</strong> in the admin panel.
           </p>
         </motion.div>
       </motion.div>

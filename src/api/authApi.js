@@ -68,6 +68,22 @@ export async function apiLogin(email, password) {
   return body.user;
 }
 
+export async function apiLoginDriver(name, password) {
+  const body = await apiFetch(`${API}/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      name: String(name).trim(),
+      password,
+    }),
+  });
+  if (!body.token || !body.user) {
+    throw new Error("Invalid login response from server");
+  }
+  setAuthToken(body.token);
+  return body.user;
+}
+
 export async function apiLookupUser(email) {
   const trimmed = String(email || "").trim().toLowerCase();
   if (!trimmed) return { exists: false };
@@ -122,5 +138,24 @@ export async function apiUpdateProfile(display_name) {
 }
 
 export async function apiListDrivers() {
-  return apiFetch("/api/users?role=driver");
+  return apiFetch("/api/users?role=driver", {
+    headers: { Authorization: `Bearer ${getAuthToken()}` },
+  });
+}
+
+export async function apiListAdminDrivers() {
+  return apiFetch("/api/admin/drivers", {
+    headers: { Authorization: `Bearer ${getAuthToken()}` },
+  });
+}
+
+export async function apiCreateDriver({ display_name, password, vehicle_name, plate }) {
+  return apiFetch("/api/admin/drivers", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${getAuthToken()}`,
+    },
+    body: JSON.stringify({ display_name, password, vehicle_name, plate }),
+  });
 }

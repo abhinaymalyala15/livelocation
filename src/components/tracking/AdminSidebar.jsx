@@ -9,6 +9,7 @@ import {
   LogOut,
   ChevronLeft,
   ChevronRight,
+  Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/AuthContext";
@@ -16,6 +17,7 @@ import { LiveDot } from "./LiveIndicator";
 
 const navItems = [
   { path: "/admin", icon: LayoutDashboard, label: "Live Map" },
+  { path: "/admin/drivers", icon: Users, label: "Drivers" },
   { path: "/admin/vehicles", icon: Truck, label: "Vehicles" },
   { path: "/admin/trip-logs", icon: Route, label: "Trips" },
   { path: "/admin/geofences", icon: ShieldCheck, label: "Geofences" },

@@ -1,9 +1,36 @@
 import crypto from "crypto";
 import { db } from "./db.js";
 
+export function normalizeLoginName(name) {
+  return String(name).trim().toLowerCase().replace(/\s+/g, " ");
+}
+
 export function hashPassword(password) {
   return crypto.createHash("sha256").update(String(password)).digest("hex");
 }
+
+function migrateLoginNameColumn() {
+  const cols = db.prepare("PRAGMA table_info(users)").all();
+  if (!cols.some((c) => c.name === "login_name")) {
+    db.exec("ALTER TABLE users ADD COLUMN login_name TEXT");
+    db.exec(
+      "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_login_name ON users(login_name) WHERE login_name IS NOT NULL"
+    );
+  }
+  const drivers = db
+    .prepare("SELECT id, display_name, login_name FROM users WHERE role = 'driver'")
+    .all();
+  for (const row of drivers) {
+    if (!row.login_name && row.display_name) {
+      db.prepare("UPDATE users SET login_name = ? WHERE id = ?").run(
+        normalizeLoginName(row.display_name),
+        row.id
+      );
+    }
+  }
+}
+
+migrateLoginNameColumn();
 
 export function createToken() {
   return crypto.randomBytes(24).toString("hex");
@@ -49,18 +76,61 @@ export function registerDriver({ email, password, display_name }) {
   const exists = db.prepare("SELECT id FROM users WHERE email = ?").get(trimmedEmail);
   if (exists) throw { status: 409, message: "Email already registered" };
 
+  const loginName = normalizeLoginName(name);
+  const nameTaken = db.prepare("SELECT id FROM users WHERE login_name = ?").get(loginName);
+  if (nameTaken) throw { status: 409, message: "Driver name already in use" };
+
   const user = {
     id: `user_${Date.now()}`,
     email: trimmedEmail,
     password_hash: hashPassword(password),
     role: "driver",
     display_name: name,
+    login_name: loginName,
     created_at: new Date().toISOString(),
   };
 
   db.prepare(
-    `INSERT INTO users (id, email, password_hash, role, display_name, created_at)
-     VALUES (@id, @email, @password_hash, @role, @display_name, @created_at)`
+    `INSERT INTO users (id, email, password_hash, role, display_name, login_name, created_at)
+     VALUES (@id, @email, @password_hash, @role, @display_name, @login_name, @created_at)`
+  ).run(user);
+
+  return toPublicUser(user);
+}
+
+/** Admin creates driver account (name + password); vehicle added separately in route */
+export function createDriverByAdmin({ display_name, password }) {
+  const name = String(display_name).trim();
+  const pwd = String(password);
+
+  if (!name || !pwd) {
+    throw { status: 400, message: "Driver name and password are required" };
+  }
+  if (pwd.length < 4) {
+    throw { status: 400, message: "Password must be at least 4 characters" };
+  }
+
+  const loginName = normalizeLoginName(name);
+  const nameTaken = db.prepare("SELECT id FROM users WHERE login_name = ?").get(loginName);
+  if (nameTaken) throw { status: 409, message: "Driver name already exists" };
+
+  const id = `user_${Date.now()}`;
+  const safe = loginName.replace(/[^a-z0-9]+/g, ".").replace(/^\.|\.$/g, "") || "driver";
+  const email = `${safe}.${id}@fleet.local`;
+
+  const user = {
+    id,
+    email,
+    password_hash: hashPassword(pwd),
+    role: "driver",
+    display_name: name,
+    login_name: loginName,
+    created_at: new Date().toISOString(),
+  };
+
+  db.prepare(
+    `INSERT INTO users (id, email, password_hash, role, display_name, login_name, created_at)
+     VALUES (@id, @email, @password_hash, @role, @display_name, @login_name, @created_at)`
   ).run(user);
 
   return toPublicUser(user);
@@ -71,6 +141,23 @@ export function loginUser(email, password) {
   const row = db.prepare("SELECT * FROM users WHERE email = ?").get(trimmedEmail);
   if (!row || row.password_hash !== hashPassword(password)) {
     throw { status: 401, message: "Invalid email or password" };
+  }
+  const user = toPublicUser(row);
+  const token = createToken();
+  saveSession(token, user);
+  return { user, token };
+}
+
+/** Driver sign-in with display name + password (set by admin) */
+export function loginDriverByName(name, password) {
+  const loginName = normalizeLoginName(name);
+  if (!loginName) throw { status: 400, message: "Driver name is required" };
+
+  const row = db
+    .prepare("SELECT * FROM users WHERE login_name = ? AND role = 'driver'")
+    .get(loginName);
+  if (!row || row.password_hash !== hashPassword(password)) {
+    throw { status: 401, message: "Invalid name or password" };
   }
   const user = toPublicUser(row);
   const token = createToken();
@@ -141,6 +228,7 @@ function toPublicUser(row) {
     role: row.role,
     name: row.display_name,
     display_name: row.display_name,
+    login_name: row.login_name || normalizeLoginName(row.display_name),
     status: "active",
     created_at: row.created_at,
   };

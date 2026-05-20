@@ -9,14 +9,20 @@ import { initStorage, getStorageHealth, logStorageStartup } from "./storage.js";
 import { seedDatabaseIfEmpty } from "./seed.js";
 import {
   loginUser,
+  loginDriverByName,
   logoutToken,
-  registerDriver,
+  createDriverByAdmin,
   getUserByToken,
   updateDisplayName,
   listUsers,
   lookupUserByEmail,
 } from "./auth.js";
-import { initFleetTables, getFleetSummary, listVehicles } from "./fleetRepository.js";
+import {
+  initFleetTables,
+  getFleetSummary,
+  listVehicles,
+  createVehicle,
+} from "./fleetRepository.js";
 import { createFleetRouter } from "./fleetRoutes.js";
 import { initTrackingSocket } from "./socket.js";
 
@@ -32,6 +38,15 @@ function bearerToken(req) {
   return h.startsWith("Bearer ") ? h.slice(7) : null;
 }
 
+function requireAdmin(req, res, next) {
+  const user = getUserByToken(bearerToken(req));
+  if (!user || user.role !== "admin") {
+    return res.status(403).json({ error: "Admin only" });
+  }
+  req.user = user;
+  next();
+}
+
 initStorage();
 logStorageStartup();
 
@@ -45,13 +60,8 @@ const fleetRouter = createFleetRouter({
 });
 app.use("/api/fleet", fleetRouter);
 
-app.post("/api/auth/register", (req, res) => {
-  try {
-    const user = registerDriver(req.body);
-    res.status(201).json({ user });
-  } catch (e) {
-    res.status(e.status || 500).json({ error: e.message });
-  }
+app.post("/api/auth/register", (_req, res) => {
+  res.status(403).json({ error: "Drivers are created by admin only" });
 });
 
 app.get("/api/auth/lookup", (req, res) => {
@@ -76,10 +86,48 @@ app.get("/api/auth/lookup", (req, res) => {
 
 app.post("/api/auth/login", (req, res) => {
   try {
-    const { user, token } = loginUser(req.body.email, req.body.password);
+    const { email, name, password } = req.body;
+    const { user, token } =
+      name && !email
+        ? loginDriverByName(name, password)
+        : loginUser(email, password);
     res.json({ user, token });
   } catch (e) {
     res.status(e.status || 401).json({ error: e.message });
+  }
+});
+
+app.get("/api/admin/drivers", requireAdmin, (_req, res) => {
+  const drivers = listUsers("driver").map((d) => ({
+    ...d,
+    vehicles: listVehicles({ driverEmail: d.email }),
+  }));
+  res.json(drivers);
+});
+
+app.post("/api/admin/drivers", requireAdmin, (req, res) => {
+  try {
+    const { display_name, password, vehicle_name, plate } = req.body;
+    const vName = String(vehicle_name || "").trim();
+    const plateId = String(plate || "").trim();
+    if (!vName || !plateId) {
+      return res.status(400).json({ error: "Vehicle name and plate are required" });
+    }
+
+    const user = createDriverByAdmin({ display_name, password });
+    const vehicle = createVehicle({
+      vehicle_name: vName,
+      name: vName,
+      vehicle_unique_id: plateId.toUpperCase(),
+      plate: plateId.toUpperCase(),
+      driver_email: user.email,
+      driver_name: user.display_name,
+      driver_id: user.id,
+      status: "available",
+    });
+    res.status(201).json({ user, vehicle });
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
   }
 });
 
@@ -105,7 +153,7 @@ app.patch("/api/auth/profile", (req, res) => {
   }
 });
 
-app.get("/api/users", (req, res) => {
+app.get("/api/users", requireAdmin, (req, res) => {
   const role = req.query.role || null;
   res.json(listUsers(role));
 });

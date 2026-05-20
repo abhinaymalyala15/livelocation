@@ -15,6 +15,7 @@ import AdminDashboard from './pages/AdminDashboard';
 import AdminVehicles from './pages/AdminVehicles';
 import AdminTripLogs from './pages/AdminTripLogs';
 import AdminGeofences from './pages/AdminGeofences';
+import AdminDrivers from './pages/AdminDrivers';
 import AdminLayout from './components/tracking/AdminLayout';
 import FleetDataLoader from './components/FleetDataLoader';
 
@@ -58,6 +59,7 @@ const AuthenticatedApp = () => {
         }
       >
         <Route path="/admin" element={<AdminDashboard />} />
+        <Route path="/admin/drivers" element={<AdminDrivers />} />
         <Route path="/admin/vehicles" element={<AdminVehicles />} />
         <Route path="/admin/trip-logs" element={<AdminTripLogs />} />
         <Route path="/admin/geofences" element={<AdminGeofences />} />
