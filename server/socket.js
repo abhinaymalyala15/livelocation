@@ -34,6 +34,16 @@ export function initTrackingSocket(httpServer) {
 
     if (role === "driver") {
       socket.join("drivers");
+      const activeToken = socket.handshake.auth?.token;
+      for (const other of io.sockets.sockets.values()) {
+        if (other.id === socket.id) continue;
+        if (other.user?.role !== "driver") continue;
+        if (other.user?.email !== socket.user.email) continue;
+        if (other.handshake.auth?.token !== activeToken) {
+          other.emit("session:revoked", { reason: "logged_in_elsewhere" });
+          other.disconnect(true);
+        }
+      }
     }
 
     socket.on("session:register", ({ vehicleId, driverId } = {}) => {
@@ -70,8 +80,20 @@ export function initTrackingSocket(httpServer) {
     }
   }, 4000);
 
+  function revokeDriverSockets(driverEmail, activeToken) {
+    const email = String(driverEmail).trim().toLowerCase();
+    for (const socket of io.sockets.sockets.values()) {
+      if (socket.user?.role !== "driver") continue;
+      if (String(socket.user?.email || "").toLowerCase() !== email) continue;
+      if (socket.handshake.auth?.token === activeToken) continue;
+      socket.emit("session:revoked", { reason: "logged_in_elsewhere" });
+      socket.disconnect(true);
+    }
+  }
+
   return {
     io,
+    revokeDriverSockets,
     broadcastLocation(io, payload) {
       liveSessions.set(payload.vehicleId, {
         ...payload,

@@ -1,3 +1,5 @@
+import { emitSessionRevoked } from "@/lib/sessionRevoke";
+
 const API = "/api/auth";
 const TOKEN_KEY = "fleet_token";
 
@@ -19,6 +21,9 @@ async function parseJson(res) {
     body = { error: res.status === 404 ? "API route not found — restart backend (npm run dev)" : "Invalid server response" };
   }
   if (!res.ok) {
+    if (res.status === 401 && getAuthToken()) {
+      emitSessionRevoked({ reason: "session_expired", source: "auth" });
+    }
     const err = new Error(body.error || body.message || `Request failed (${res.status})`);
     err.status = res.status;
     err.body = body;

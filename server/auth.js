@@ -47,6 +47,37 @@ function deleteSession(token) {
   if (token) db.prepare("DELETE FROM auth_sessions WHERE token = ?").run(token);
 }
 
+function setDriverActiveSession(userId, token) {
+  db.prepare(
+    `INSERT INTO driver_active_session (user_id, token, updated_at) VALUES (?, ?, ?)
+     ON CONFLICT(user_id) DO UPDATE SET token = excluded.token, updated_at = excluded.updated_at`
+  ).run(userId, token, new Date().toISOString());
+}
+
+function clearDriverActiveSession(userId, token) {
+  const row = db.prepare("SELECT token FROM driver_active_session WHERE user_id = ?").get(userId);
+  if (row?.token === token) {
+    db.prepare("DELETE FROM driver_active_session WHERE user_id = ?").run(userId);
+  }
+}
+
+/** Remove all stored sessions for this driver except the new token */
+export function revokeOtherDriverSessions(driverEmail, keepToken) {
+  const email = String(driverEmail).trim().toLowerCase();
+  const sessions = db.prepare("SELECT token, user_json FROM auth_sessions").all();
+  for (const sess of sessions) {
+    if (sess.token === keepToken) continue;
+    try {
+      const parsed = JSON.parse(sess.user_json);
+      if (parsed.role === "driver" && String(parsed.email).toLowerCase() === email) {
+        deleteSession(sess.token);
+      }
+    } catch {
+      deleteSession(sess.token);
+    }
+  }
+}
+
 export function seedDefaultAdmin() {
   const existing = db.prepare("SELECT id FROM users WHERE email = ?").get("admin@fleet.com");
   if (existing) return;
@@ -161,7 +192,9 @@ export function loginDriverByName(name, password) {
   }
   const user = toPublicUser(row);
   const token = createToken();
+  revokeOtherDriverSessions(user.email, token);
   saveSession(token, user);
+  setDriverActiveSession(user.id, token);
   return { user, token };
 }
 
@@ -170,7 +203,14 @@ export function getUserByToken(token) {
   const row = db.prepare("SELECT user_json FROM auth_sessions WHERE token = ?").get(token);
   if (!row) return null;
   try {
-    return JSON.parse(row.user_json);
+    const user = JSON.parse(row.user_json);
+    if (user.role === "driver") {
+      const active = db
+        .prepare("SELECT token FROM driver_active_session WHERE user_id = ?")
+        .get(user.id);
+      if (!active || active.token !== token) return null;
+    }
+    return user;
   } catch {
     deleteSession(token);
     return null;
@@ -178,7 +218,17 @@ export function getUserByToken(token) {
 }
 
 export function logoutToken(token) {
+  const row = db.prepare("SELECT user_json FROM auth_sessions WHERE token = ?").get(token);
+  let user = null;
+  if (row) {
+    try {
+      user = JSON.parse(row.user_json);
+    } catch {
+      /* drop */
+    }
+  }
   deleteSession(token);
+  if (user?.role === "driver") clearDriverActiveSession(user.id, token);
 }
 
 export function updateDisplayName(email, display_name) {

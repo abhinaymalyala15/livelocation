@@ -1,8 +1,18 @@
 import { io } from "socket.io-client";
 import { getAuthToken } from "@/api/authApi";
+import { emitSessionRevoked } from "@/lib/sessionRevoke";
 
 let socket = null;
 let refCount = 0;
+let revokeListenerAttached = false;
+
+function attachRevokeListener(sock) {
+  if (revokeListenerAttached || !sock) return;
+  revokeListenerAttached = true;
+  sock.on("session:revoked", (payload) => {
+    emitSessionRevoked({ reason: payload?.reason || "logged_in_elsewhere", source: "socket" });
+  });
+}
 
 export function getTrackingSocket() {
   return socket;
@@ -22,6 +32,7 @@ export function acquireTrackingSocket({ role, vehicleId, driverId } = {}) {
       reconnectionDelay: 1000,
       transports: ["websocket", "polling"],
     });
+    attachRevokeListener(socket);
   } else {
     socket.auth = { token };
   }
@@ -59,5 +70,6 @@ export function releaseTrackingSocket() {
   if (refCount === 0 && socket) {
     socket.disconnect();
     socket = null;
+    revokeListenerAttached = false;
   }
 }

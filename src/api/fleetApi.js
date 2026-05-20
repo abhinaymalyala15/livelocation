@@ -1,4 +1,5 @@
 import { getAuthToken } from "./authApi";
+import { emitSessionRevoked } from "@/lib/sessionRevoke";
 
 const API = "/api/fleet";
 
@@ -11,6 +12,9 @@ async function parseJson(res) {
     body = { error: "Invalid server response" };
   }
   if (!res.ok) {
+    if (res.status === 401 && getAuthToken()) {
+      emitSessionRevoked({ reason: "session_expired", source: "api" });
+    }
     const err = new Error(body.error || `Request failed (${res.status})`);
     err.status = res.status;
     throw err;

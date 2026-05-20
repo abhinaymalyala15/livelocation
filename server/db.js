@@ -91,6 +91,12 @@ db.exec(`
     user_json TEXT NOT NULL,
     created_at TEXT NOT NULL
   );
+
+  CREATE TABLE IF NOT EXISTS driver_active_session (
+    user_id TEXT PRIMARY KEY,
+    token TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
 `);
 
 export function getSnapshot() {

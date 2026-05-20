@@ -1,6 +1,9 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
+import React, { createContext, useState, useContext, useEffect, useRef } from 'react';
+import { toast } from 'sonner';
 import { base44 } from '@/api/base44Client';
 import { setAuthToken, apiLoginDriver } from '@/api/authApi';
+import { onSessionRevoked } from '@/lib/sessionRevoke';
+import { releaseTrackingSocket } from '@/services/socketService';
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
@@ -10,8 +13,26 @@ export const AuthProvider = ({ children }) => {
   const [authError, setAuthError] = useState(null);
   const [authChecked, setAuthChecked] = useState(false);
 
+  const handlingRevokeRef = useRef(false);
+
   useEffect(() => {
     checkAppState();
+  }, []);
+
+  useEffect(() => {
+    return onSessionRevoked(async () => {
+      if (handlingRevokeRef.current) return;
+      handlingRevokeRef.current = true;
+      releaseTrackingSocket();
+      setAuthToken(null);
+      setUser(null);
+      setIsAuthenticated(false);
+      setAuthChecked(true);
+      setAuthError({ type: 'auth_required', message: 'Signed out' });
+      toast.info('Signed in on another device. GPS tracking moved to that device.');
+      const returnPath = encodeURIComponent(window.location.pathname + window.location.search);
+      window.location.href = `/login?return=${returnPath}`;
+    });
   }, []);
 
   const checkAppState = async () => {

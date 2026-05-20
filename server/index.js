@@ -87,10 +87,12 @@ app.get("/api/auth/lookup", (req, res) => {
 app.post("/api/auth/login", (req, res) => {
   try {
     const { email, name, password } = req.body;
-    const { user, token } =
-      name && !email
-        ? loginDriverByName(name, password)
-        : loginUser(email, password);
+    if (name && !email) {
+      const { user, token } = loginDriverByName(name, password);
+      tracking.revokeDriverSockets(user.email, token);
+      return res.json({ user, token });
+    }
+    const { user, token } = loginUser(email, password);
     res.json({ user, token });
   } catch (e) {
     res.status(e.status || 401).json({ error: e.message });
