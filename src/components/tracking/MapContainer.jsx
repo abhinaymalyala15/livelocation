@@ -1,6 +1,8 @@
 import { useRef, useMemo, useEffect, useCallback } from "react";
-import { GoogleMap, Marker, Polyline, Circle } from "@react-google-maps/api";
+import { GoogleMap, Marker, Circle } from "@react-google-maps/api";
 import { useGoogleMaps } from "@/components/GoogleMapsProvider";
+import useRoadSnappedPath from "@/hooks/useRoadSnappedPath";
+import RoutePathPolylines from "@/components/tracking/RoutePathPolylines";
 import {
   defaultMapCenter,
   defaultMapOptions,
@@ -51,14 +53,10 @@ export default function MapView({
     selectedVehicle?.current_longitude,
   ]);
 
-  const polylinePath = useMemo(
-    () =>
-      tripPath.map((point) => ({
-        lat: typeof point[0] === "number" ? point[0] : point.lat,
-        lng: typeof point[1] === "number" ? point[1] : point.lng,
-      })),
-    [tripPath]
-  );
+  const { displayPath: routePath, rawPath, isSnapped } = useRoadSnappedPath(tripPath, {
+    enabled: tripPath.length > 1,
+    debounceMs: 700,
+  });
 
   const activeVehicles = vehicles.filter((v) => v.latitude != null && v.longitude != null);
 
@@ -180,28 +178,12 @@ export default function MapView({
           />
         ))}
 
-      {polylinePath.length > 1 && (
-        <>
-          <Polyline
-            path={polylinePath}
-            options={{
-              strokeColor: "#10b981",
-              strokeOpacity: 0.25,
-              strokeWeight: 6,
-              geodesic: true,
-            }}
-          />
-          <Polyline
-            path={polylinePath}
-            options={{
-              strokeColor: "#10b981",
-              strokeOpacity: 0.9,
-              strokeWeight: 3,
-              geodesic: true,
-            }}
-          />
-        </>
-      )}
+      <RoutePathPolylines
+        path={routePath}
+        rawPath={rawPath}
+        showRawGhost={isSnapped && rawPath.length > 1}
+        color="#10b981"
+      />
 
       {selectedVehicle?.latitude != null && selectedVehicle?.longitude != null && (
         <Circle

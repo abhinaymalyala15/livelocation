@@ -5,7 +5,9 @@ import moment from 'moment';
 import { useGoogleMaps } from '@/components/GoogleMapsProvider';
 import { defaultMapCenter, defaultMapOptions, triggerMapResize } from '@/lib/mapConfig';
 import useTripRoutePath from '@/hooks/useTripRoutePath';
+import useRoadSnappedPath from '@/hooks/useRoadSnappedPath';
 import useRoutePlayback from '@/hooks/useRoutePlayback';
+import RoutePathPolylines from '@/components/tracking/RoutePathPolylines';
 import MapsUnavailable from './MapsUnavailable';
 import Loader from './Loader';
 import AnimatedVehicleMarker from './AnimatedVehicleMarker';
@@ -33,8 +35,13 @@ export default function TripRouteMap({ trip, className = '' }) {
   const mapRef = useRef(null);
   const { isLoaded, isConfigured } = useGoogleMaps();
   const { path, loading, pointCount } = useTripRoutePath(trip);
+  const { displayPath: roadPath, rawPath, isSnapped } = useRoadSnappedPath(path, {
+    enabled: path.length > 1,
+    debounceMs: 400,
+  });
+  const routePath = roadPath.length > 1 ? roadPath : path;
 
-  const playback = useRoutePlayback(path);
+  const playback = useRoutePlayback(routePath);
   const {
     playing,
     play,
@@ -51,12 +58,12 @@ export default function TripRouteMap({ trip, className = '' }) {
 
   const fitRoute = useCallback(
     (map) => {
-      if (!map || path.length === 0 || !window.google?.maps) return;
+      if (!map || routePath.length === 0 || !window.google?.maps) return;
       const bounds = new window.google.maps.LatLngBounds();
-      path.forEach((p) => bounds.extend(p));
+      routePath.forEach((p) => bounds.extend(p));
       map.fitBounds(bounds, { top: 56, right: 48, bottom: 80, left: 48 });
     },
-    [path]
+    [routePath]
   );
 
   const handleMapLoad = useCallback(
@@ -70,8 +77,8 @@ export default function TripRouteMap({ trip, className = '' }) {
   );
 
   useEffect(() => {
-    if (mapRef.current && path.length > 0) fitRoute(mapRef.current);
-  }, [path, fitRoute]);
+    if (mapRef.current && routePath.length > 0) fitRoute(mapRef.current);
+  }, [routePath, fitRoute]);
 
   useEffect(() => {
     reset();
@@ -94,14 +101,17 @@ export default function TripRouteMap({ trip, className = '' }) {
 
   const distanceKm = trip.distance_km ?? trip.distance;
   const isActive = trip.status === 'active';
-  const startPoint = path[0];
-  const endPoint = path.length > 1 ? path[path.length - 1] : null;
+  const startPoint = routePath[0];
+  const endPoint = routePath.length > 1 ? routePath[routePath.length - 1] : null;
   const showEndMarker = Boolean(endPoint) && !playing;
-  const displayPath = playing || playbackPercent > 0 ? visiblePath : path;
+  const playbackPath = playing || playbackPercent > 0 ? visiblePath : null;
   const mapCenter =
     currentPosition ??
-    (path.length > 0
-      ? { lat: path[Math.floor(path.length / 2)].lat, lng: path[Math.floor(path.length / 2)].lng }
+    (routePath.length > 0
+      ? {
+          lat: routePath[Math.floor(routePath.length / 2)].lat,
+          lng: routePath[Math.floor(routePath.length / 2)].lng,
+        }
       : defaultMapCenter);
 
   return (
@@ -156,26 +166,23 @@ export default function TripRouteMap({ trip, className = '' }) {
               gestureHandling: 'greedy',
             }}
           >
-            {path.length > 1 && (
-              <Polyline
-                path={path}
-                options={{
-                  strokeColor: '#94a3b8',
-                  strokeOpacity: 0.35,
-                  strokeWeight: 5,
-                  geodesic: true,
-                }}
+            {!playbackPath && (
+              <RoutePathPolylines
+                path={routePath}
+                rawPath={rawPath}
+                showRawGhost={isSnapped && rawPath.length > 1}
+                color={isActive ? '#0ea5e9' : '#10b981'}
               />
             )}
 
-            {displayPath.length > 1 && (
+            {playbackPath && playbackPath.length > 1 && (
               <Polyline
-                path={displayPath}
+                path={playbackPath}
                 options={{
                   strokeColor: isActive ? '#0ea5e9' : '#10b981',
                   strokeOpacity: 0.95,
                   strokeWeight: 5,
-                  geodesic: true,
+                  geodesic: false,
                 }}
               />
             )}

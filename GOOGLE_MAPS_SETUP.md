@@ -25,6 +25,7 @@ In the Google Cloud Console:
 
 1. Search for and enable these APIs:
    - **Maps JavaScript API** - Required for displaying maps
+   - **Directions API** - Required for road-aligned trip route lines (admin & driver maps)
    - **Geocoding API** - Required for location searching (optional)
    - **Distance Matrix API** - Required for distance/duration analysis (optional)
    - **Places API** - Required for place search/autocomplete (optional)

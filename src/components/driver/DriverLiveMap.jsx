@@ -1,6 +1,8 @@
 import { useRef, useEffect, useMemo, useCallback } from "react";
 import { motion } from "framer-motion";
-import { GoogleMap, Marker, Polyline, Circle } from "@react-google-maps/api";
+import { GoogleMap, Marker, Circle } from "@react-google-maps/api";
+import useRoadSnappedPath from "@/hooks/useRoadSnappedPath";
+import RoutePathPolylines from "@/components/tracking/RoutePathPolylines";
 import { useGoogleMaps } from "@/components/GoogleMapsProvider";
 import {
   defaultMapCenter,
@@ -25,10 +27,10 @@ export default function DriverLiveMap({ position, tripPath = [], tracking, class
     return defaultMapCenter;
   }, [position?.latitude, position?.longitude]);
 
-  const path = useMemo(
-    () => tripPath.map((p) => ({ lat: p.lat, lng: p.lng })),
-    [tripPath]
-  );
+  const { displayPath: routePath, rawPath, isSnapped } = useRoadSnappedPath(tripPath, {
+    enabled: tripPath.length > 1,
+    debounceMs: 800,
+  });
 
   const onLoad = useCallback((map) => {
     mapRef.current = map;
@@ -80,12 +82,12 @@ export default function DriverLiveMap({ position, tripPath = [], tracking, class
         options={mapOptions}
         onLoad={onLoad}
       >
-        {path.length > 1 && (
-          <Polyline
-            path={path}
-            options={{ strokeColor: "#0d9488", strokeWeight: 4, strokeOpacity: 0.85 }}
-          />
-        )}
+        <RoutePathPolylines
+          path={routePath}
+          rawPath={rawPath}
+          showRawGhost={isSnapped && rawPath.length > 1}
+          color="#0d9488"
+        />
         {position && (
           <>
             <Circle
