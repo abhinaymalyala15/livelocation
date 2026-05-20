@@ -52,20 +52,28 @@ export default function Login() {
     else navigate("/driver", { replace: true });
   };
 
+  const driverNameLooksLikeEmail = driverName.trim().includes("@");
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
     setSubmitting(true);
     try {
-      const loggedIn =
-        roleTab === "driver"
-          ? await login(driverName.trim(), password, { asDriver: true })
-          : await login(email.trim().toLowerCase(), password);
+      const nameTrim = driverName.trim();
+      const useAdminLogin =
+        roleTab === "admin" || (roleTab === "driver" && nameTrim.includes("@"));
+
+      const loggedIn = useAdminLogin
+        ? await login(
+            (roleTab === "admin" ? email : nameTrim).trim().toLowerCase(),
+            password
+          )
+        : await login(nameTrim, password, { asDriver: true });
       navigateAfterLogin(loggedIn);
     } catch (err) {
       setError(
         err.message ||
-          (roleTab === "driver"
+          (roleTab === "driver" && !driverNameLooksLikeEmail
             ? "Invalid name or password. Ask admin for your login."
             : "Invalid email or password.")
       );
@@ -75,6 +83,12 @@ export default function Login() {
   };
 
   const handleTabChange = (tab) => {
+    if (tab === "admin" && driverName.trim().includes("@")) {
+      setEmail(driverName.trim().toLowerCase());
+    }
+    if (tab === "driver" && email.trim().includes("@")) {
+      setDriverName(email.trim());
+    }
     setRoleTab(tab);
     setError("");
   };
@@ -198,6 +212,12 @@ export default function Login() {
                       autoComplete="username"
                     />
                   </motion.div>
+                  {driverNameLooksLikeEmail && (
+                    <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                      This looks like an admin email. Use the <strong>Admin</strong> tab, or press Sign in — we will
+                      use admin login automatically.
+                    </p>
+                  )}
                 </motion.div>
               ) : (
                 <motion.div className="space-y-2">
