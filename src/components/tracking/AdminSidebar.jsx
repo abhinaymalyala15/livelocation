@@ -23,7 +23,7 @@ const navItems = [
   { path: "/admin/geofences", icon: ShieldCheck, label: "Geofences" },
 ];
 
-export default function AdminSidebar({ collapsed = false, onToggleCollapse }) {
+export default function AdminSidebar({ collapsed = false, onToggleCollapse, onNavigate }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { logout, user } = useAuth();
@@ -38,8 +38,8 @@ export default function AdminSidebar({ collapsed = false, onToggleCollapse }) {
       layout
       transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
       className={cn(
-        "h-screen flex flex-col bg-sidebar text-sidebar-foreground border-r border-sidebar-border shrink-0",
-        collapsed ? "w-[4.25rem]" : "w-60"
+        "h-[100dvh] max-h-[100dvh] flex flex-col bg-sidebar text-sidebar-foreground border-r border-sidebar-border shrink-0",
+        collapsed ? "w-[4.25rem]" : "w-60 max-w-[85vw]"
       )}
     >
       <div className="h-14 flex items-center gap-2 px-3 border-b border-sidebar-border shrink-0">
@@ -86,6 +86,7 @@ export default function AdminSidebar({ collapsed = false, onToggleCollapse }) {
             <Link
               key={item.path}
               to={item.path}
+              onClick={() => onNavigate?.()}
               title={collapsed ? item.label : undefined}
               className={cn(
                 "relative flex items-center gap-3 rounded-lg text-sm font-medium transition-colors duration-200",

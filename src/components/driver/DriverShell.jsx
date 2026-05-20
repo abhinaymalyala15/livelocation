@@ -21,8 +21,8 @@ export default function DriverShell({
 
   if (minimal) {
     return (
-      <div className="min-h-screen bg-background flex flex-col">
-        <header className="shrink-0 flex items-center justify-between px-4 py-2.5 border-b border-border bg-card">
+      <div className="min-h-[100dvh] max-h-[100dvh] bg-background flex flex-col overflow-hidden">
+        <header className="shrink-0 flex items-center justify-between px-4 py-2.5 border-b border-border bg-card safe-top">
           <div className="flex items-center gap-2">
             <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
               <Map className="h-4 w-4 text-primary-foreground" />

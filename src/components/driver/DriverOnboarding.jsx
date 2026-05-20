@@ -52,7 +52,7 @@ export default function DriverOnboarding({ user, onComplete }) {
     <motion.section
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      className="surface-card rounded-xl border border-primary/20 p-6 max-w-lg mx-auto"
+      className="surface-card rounded-xl border border-primary/20 p-4 sm:p-6 w-full max-w-lg mx-auto"
     >
       <h2 className="text-lg font-semibold">Set up your driver profile</h2>
       <p className="text-sm text-muted-foreground mt-1 mb-6">

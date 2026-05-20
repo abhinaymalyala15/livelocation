@@ -14,7 +14,7 @@ export default function AdminLayout() {
   }, []);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
+    <div className="flex h-[100dvh] max-h-[100dvh] overflow-hidden bg-background">
       <div className="hidden lg:flex shrink-0">
         <AdminSidebar
           collapsed={sidebarCollapsed}
@@ -28,8 +28,8 @@ export default function AdminLayout() {
             className="fixed inset-0 bg-black/40 backdrop-blur-[2px] z-30 lg:hidden"
             onClick={() => setSidebarOpen(false)}
           />
-          <div className="fixed left-0 top-0 z-40 lg:hidden shadow-2xl">
-            <AdminSidebar collapsed={false} />
+          <div className="fixed left-0 top-0 z-40 lg:hidden shadow-2xl safe-top max-h-[100dvh]">
+            <AdminSidebar collapsed={false} onNavigate={() => setSidebarOpen(false)} />
           </div>
         </>
       )}

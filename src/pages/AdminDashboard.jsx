@@ -151,8 +151,8 @@ export default function AdminDashboard() {
 
   return (
     <div className="h-full flex flex-col lg:flex-row min-h-0">
-      {/* Left: fleet list + vehicle details (not on the map) */}
-      <aside className="order-2 lg:order-1 w-full lg:w-80 xl:w-96 flex flex-col border-t lg:border-t-0 lg:border-r border-border bg-card shrink-0 shadow-sm min-h-0 max-h-[42vh] lg:max-h-full">
+      {/* Mobile: map first; desktop: sidebar left */}
+      <aside className="order-2 lg:order-1 w-full lg:w-80 xl:w-96 flex flex-col border-t lg:border-t-0 lg:border-r border-border bg-card shrink-0 shadow-sm min-h-0 max-h-[38dvh] sm:max-h-[42vh] lg:max-h-full">
         <div className="flex-1 min-h-0 overflow-hidden">
           <VehicleList
             vehicles={vehicles}
@@ -180,8 +180,8 @@ export default function AdminDashboard() {
       </aside>
 
       {/* Right: stats + full map (no overlays) */}
-      <div className="order-1 lg:order-2 flex-1 flex flex-col overflow-hidden min-w-0 min-h-[min(52dvh,560px)] lg:min-h-0">
-        <div className="p-4 lg:p-5 space-y-4 shrink-0">
+      <div className="order-1 lg:order-2 flex-1 flex flex-col overflow-hidden min-w-0 min-h-[min(55dvh,520px)] sm:min-h-[min(52dvh,560px)] lg:min-h-0">
+        <div className="p-3 sm:p-4 lg:p-5 space-y-3 sm:space-y-4 shrink-0">
           <DashboardHero
             activeCount={activeCount}
             totalCount={vehicles.length}
@@ -203,8 +203,8 @@ export default function AdminDashboard() {
           {socketConnected && <LiveBadge label="LIVE" />}
         </div>
 
-        <div className="flex-1 px-4 lg:px-5 pb-4 lg:pb-5 min-h-[min(45dvh,480px)]">
-          <div className="h-full min-h-[min(45dvh,480px)] rounded-2xl overflow-hidden border border-border shadow-lg surface-card ring-1 ring-black/5 map-container-fill">
+        <div className="flex-1 px-3 sm:px-4 lg:px-5 pb-3 sm:pb-4 lg:pb-5 min-h-[min(40dvh,400px)] sm:min-h-[min(45dvh,480px)]">
+          <div className="h-full min-h-[min(40dvh,400px)] sm:min-h-[min(45dvh,480px)] rounded-xl sm:rounded-2xl overflow-hidden border border-border shadow-lg surface-card ring-1 ring-black/5 map-container-fill">
             <MapView
               vehicles={vehicles}
               selectedVehicle={selectedVehicle}

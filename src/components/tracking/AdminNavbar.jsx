@@ -5,6 +5,7 @@ import ConnectionIndicator from "./ConnectionIndicator";
 
 const PAGE_TITLES = {
   "/admin": { title: "Live Map", subtitle: "Monitor vehicles in real time" },
+  "/admin/drivers": { title: "Drivers", subtitle: "Create driver logins" },
   "/admin/vehicles": { title: "Vehicles", subtitle: "Manage your fleet" },
   "/admin/trip-logs": { title: "Trips", subtitle: "History and route playback" },
   "/admin/geofences": { title: "Geofences", subtitle: "Zones and alerts" },
@@ -17,7 +18,7 @@ export default function AdminNavbar({ user, onToggleSidebar, connected }) {
   return (
     <header className="h-14 shrink-0 border-b border-border bg-card/95 backdrop-blur-md flex items-center justify-between px-4 lg:px-6 sticky top-0 z-20">
       <div className="flex items-center gap-3 min-w-0">
-        <Button variant="ghost" size="icon" className="lg:hidden shrink-0" onClick={onToggleSidebar}>
+        <Button variant="ghost" size="icon" className="lg:hidden shrink-0 touch-target" onClick={onToggleSidebar} aria-label="Open menu">
           <Menu className="h-5 w-5" />
         </Button>
         <div className="min-w-0">

@@ -44,9 +44,10 @@
   }
   html {
     @apply antialiased;
+    -webkit-text-size-adjust: 100%;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground overflow-x-hidden;
     font-family: var(--font-sans);
     font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
   }
@@ -54,7 +55,7 @@
 
 @layer components {
   .page-shell {
-    @apply p-5 lg:p-8 max-w-7xl mx-auto w-full space-y-6;
+    @apply px-4 py-5 sm:px-5 sm:py-6 lg:p-8 max-w-7xl mx-auto w-full space-y-5 sm:space-y-6;
   }
   .surface-card {
     @apply bg-card rounded-xl border border-border/80 shadow-sm shadow-slate-200/50;
@@ -68,8 +69,19 @@
   .safe-top {
     padding-top: max(0.5rem, env(safe-area-inset-top));
   }
+  .safe-bottom {
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  }
   .touch-target {
     @apply min-h-11 min-w-11;
+  }
+  .table-scroll {
+    @apply overflow-x-auto -mx-1 px-1;
+    -webkit-overflow-scrolling: touch;
+  }
+  .app-viewport {
+    min-height: 100dvh;
+    min-height: 100vh;
   }
 }
 

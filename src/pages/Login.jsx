@@ -90,7 +90,7 @@ export default function Login() {
   };
 
   return (
-    <motion.div className="min-h-screen flex">
+    <motion.div className="min-h-[100dvh] flex flex-col lg:flex-row app-viewport">
       <motion.div className="hidden lg:flex lg:w-[48%] xl:w-[46%] flex-col justify-between p-10 xl:p-14 text-white relative overflow-hidden bg-[#0c1222]">
         <motion.div className="absolute inset-0 bg-gradient-to-br from-[hsl(168,76%,22%)]/40 via-transparent to-[hsl(222,47%,8%)]" />
         <motion.div className="absolute inset-0 bg-[radial-gradient(ellipse_70%_50%_at_30%_20%,hsl(168,76%,42%/0.35),transparent_60%)]" />
@@ -133,7 +133,7 @@ export default function Login() {
         <p className="relative z-10 text-xs text-white/30">FleetTrack · Live fleet operations</p>
       </motion.div>
 
-      <motion.div className="flex-1 flex items-center justify-center p-6 sm:p-10 bg-gradient-to-b from-background to-muted/30 relative">
+      <motion.div className="flex-1 flex items-center justify-center px-4 py-6 sm:p-10 safe-top safe-bottom bg-gradient-to-b from-background to-muted/30 relative overflow-y-auto">
         <motion.div
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
@@ -150,7 +150,7 @@ export default function Login() {
             </motion.div>
           </motion.div>
 
-          <motion.div className="surface-card p-7 sm:p-8 space-y-6 shadow-xl border-border/80 ring-1 ring-black/[0.03]">
+          <motion.div className="surface-card p-5 sm:p-7 md:p-8 space-y-5 sm:space-y-6 shadow-xl border-border/80 ring-1 ring-black/[0.03]">
             {apiOk === false && (
               <motion.div className="rounded-lg border border-amber-300 bg-amber-50 text-amber-900 px-3 py-2 text-sm">
                 API server is offline. Run <code className="font-mono text-xs">npm run dev</code>, then open{" "}
@@ -171,7 +171,7 @@ export default function Login() {
               <Button
                 type="button"
                 variant={roleTab === "driver" ? "default" : "ghost"}
-                size="sm"
+                className="h-11 sm:h-10"
                 onClick={() => handleTabChange("driver")}
               >
                 Driver
@@ -179,7 +179,7 @@ export default function Login() {
               <Button
                 type="button"
                 variant={roleTab === "admin" ? "default" : "ghost"}
-                size="sm"
+                className="h-11 sm:h-10"
                 onClick={() => handleTabChange("admin")}
               >
                 Admin

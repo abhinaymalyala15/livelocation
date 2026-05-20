@@ -187,7 +187,7 @@ export default function DriverDashboard() {
   if (!loadingVehicles && vehicles.length === 0) {
     return (
       <DriverShell user={user} onLogout={handleLogout} minimal>
-        <main className="flex-1 p-6 flex items-center justify-center">
+        <main className="flex-1 p-4 sm:p-6 flex items-center justify-center overflow-y-auto safe-bottom">
           <DriverOnboarding
             user={user}
             onComplete={async () => {
@@ -239,8 +239,8 @@ export default function DriverDashboard() {
             tracking={trackingEnabled}
             className="absolute inset-0"
           />
-          <div className="absolute bottom-3 left-3 right-3 z-10 pointer-events-none">
-            <div className="pointer-events-auto max-w-md mx-auto">
+          <div className="absolute bottom-2 left-2 right-2 sm:bottom-3 sm:left-3 sm:right-3 z-10 pointer-events-none">
+            <div className="pointer-events-auto w-full max-w-md mx-auto">
               <LiveDistanceHero
                 todayDistanceKm={todayTotalKm}
                 tripDistanceKm={tripDistanceKm}

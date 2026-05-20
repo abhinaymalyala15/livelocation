@@ -71,7 +71,7 @@ export default function AdminDrivers() {
   if (isLoading) return <Loader text="Loading drivers…" />;
 
   return (
-    <div className="space-y-6 p-4 md:p-6">
+    <div className="page-shell">
       <PageHeader
         title="Drivers"
         description="Create driver logins and assign their vehicle. Drivers sign in with the name and password you set here."
@@ -150,8 +150,8 @@ export default function AdminDrivers() {
         <CardHeader className="pb-3">
           <h3 className="font-semibold">Registered drivers ({drivers.length})</h3>
         </CardHeader>
-        <CardContent className="p-0 overflow-x-auto">
-          <Table>
+        <CardContent className="p-0 table-scroll">
+          <Table className="min-w-[520px]">
             <TableHeader>
               <TableRow>
                 <TableHead>Name</TableHead>

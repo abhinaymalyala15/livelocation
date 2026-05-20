@@ -31,9 +31,9 @@ export default function LiveDistanceHero({
           <CalendarDays className="h-3.5 w-3.5" />
           Today&apos;s Distance
         </p>
-        <p className="mt-2 text-5xl sm:text-6xl font-bold tabular-nums tracking-tight leading-none">
+        <p className="mt-2 text-4xl sm:text-5xl md:text-6xl font-bold tabular-nums tracking-tight leading-none">
           {animatedToday}
-          <span className="text-2xl sm:text-3xl font-semibold text-white/80 ml-2">KM</span>
+          <span className="text-xl sm:text-3xl font-semibold text-white/80 ml-1.5 sm:ml-2">KM</span>
         </p>
         {tripActive && (
           <motion.p

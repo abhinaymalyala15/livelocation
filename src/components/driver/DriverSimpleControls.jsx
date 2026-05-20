@@ -26,10 +26,10 @@ export default function DriverSimpleControls({
 
   return (
     <div className="shrink-0 border-t border-border bg-card/95 backdrop-blur-md safe-bottom">
-      <div className="p-3 space-y-3 max-w-lg mx-auto w-full">
+      <div className="p-3 sm:p-4 space-y-3 max-w-lg mx-auto w-full">
         {tripStatus === "idle" && vehicles.length > 1 && (
           <Select value={selectedVehicleId} onValueChange={onVehicleChange}>
-            <SelectTrigger className="h-11">
+            <SelectTrigger className="h-12 text-base">
               <SelectValue placeholder="Select vehicle" />
             </SelectTrigger>
             <SelectContent>
@@ -49,10 +49,10 @@ export default function DriverSimpleControls({
           </p>
         )}
 
-        <div className="flex gap-2">
+        <div className="flex gap-2 sm:gap-3">
           {tripStatus === "idle" ? (
             <Button
-              className="flex-1 h-12 text-base font-semibold gap-2"
+              className="flex-1 h-12 sm:h-14 text-base font-semibold gap-2 touch-target"
               onClick={onStart}
               disabled={!canStart || loading}
             >
@@ -66,7 +66,7 @@ export default function DriverSimpleControls({
           ) : (
             <Button
               variant="destructive"
-              className="flex-1 h-12 text-base font-semibold gap-2"
+              className="flex-1 h-12 sm:h-14 text-base font-semibold gap-2 touch-target"
               onClick={onEnd}
               disabled={loading}
             >
@@ -81,11 +81,11 @@ export default function DriverSimpleControls({
           <Button
             type="button"
             variant="outline"
-            className="h-12 px-4 border-destructive/40 text-destructive hover:bg-destructive/10"
+            className="h-12 min-w-[3.5rem] px-3 sm:px-4 border-destructive/40 text-destructive hover:bg-destructive/10 touch-target flex flex-col gap-0.5 sm:flex-row sm:gap-2"
             onClick={onSOS}
           >
-            <AlertTriangle className="h-5 w-5" />
-            <span className="sr-only">SOS</span>
+            <AlertTriangle className="h-5 w-5 shrink-0" />
+            <span className="text-xs font-semibold sm:sr-only">SOS</span>
           </Button>
         </div>
       </div>

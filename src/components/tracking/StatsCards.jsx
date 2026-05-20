@@ -39,14 +39,14 @@ export default function StatsCards({ vehicles, tripsToday }) {
       variants={container}
       initial="hidden"
       animate="show"
-      className="grid grid-cols-2 lg:grid-cols-5 gap-3"
+      className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3"
     >
       {displayStats.map((stat) => (
         <motion.div
           key={stat.key}
           variants={item}
           className={cn(
-            "surface-card p-4 transition-all duration-300 hover:shadow-md hover:-translate-y-0.5 ring-1",
+            "surface-card p-3 sm:p-4 transition-all duration-300 hover:shadow-md sm:hover:-translate-y-0.5 ring-1",
             stat.ring
           )}
         >
