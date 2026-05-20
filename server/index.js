@@ -3,15 +3,9 @@ import cors from "cors";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import {
-  getSnapshot,
-  saveSnapshot,
-  upsertTrip,
-  insertLocationLog,
-  getDriverDebug,
-  getStorageSummary,
-  dbPath,
-} from "./db.js";
+import { createServer } from "http";
+import { dbPath, getDriverDebug, getStorageSummary } from "./db.js";
+import { initStorage, getStorageHealth, logStorageStartup } from "./storage.js";
 import { seedDatabaseIfEmpty } from "./seed.js";
 import {
   loginUser,
@@ -22,20 +16,34 @@ import {
   listUsers,
   lookupUserByEmail,
 } from "./auth.js";
+import { initFleetTables, getFleetSummary, listVehicles } from "./fleetRepository.js";
+import { createFleetRouter } from "./fleetRoutes.js";
+import { initTrackingSocket } from "./socket.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3001;
 
 const app = express();
 app.use(cors());
-app.use(express.json({ limit: "15mb" }));
+app.use(express.json({ limit: "2mb" }));
 
 function bearerToken(req) {
   const h = req.headers.authorization || "";
   return h.startsWith("Bearer ") ? h.slice(7) : null;
 }
 
+initStorage();
+logStorageStartup();
+
 await seedDatabaseIfEmpty();
+initFleetTables();
+
+const httpServer = createServer(app);
+const tracking = initTrackingSocket(httpServer);
+const fleetRouter = createFleetRouter({
+  broadcastLocation: (payload) => tracking.broadcastLocation(tracking.io, payload),
+});
+app.use("/api/fleet", fleetRouter);
 
 app.post("/api/auth/register", (req, res) => {
   try {
@@ -53,20 +61,12 @@ app.get("/api/auth/lookup", (req, res) => {
   const fleet = { vehicles: [], activeTrips: 0, locationLogCount: 0 };
   if (result.user.role === "driver") {
     const debug = getDriverDebug(result.user.email);
-    const data = getSnapshot();
-    fleet.vehicles = (data?.vehicles || [])
-      .filter(
-        (v) =>
-          String(v.driver_email || "")
-            .trim()
-            .toLowerCase() === result.user.email
-      )
-      .map((v) => ({
-        id: v.id,
-        vehicle_name: v.vehicle_name || v.name,
-        plate: v.vehicle_unique_id || v.plate,
-        status: v.status,
-      }));
+    fleet.vehicles = listVehicles({ driverEmail: result.user.email }).map((v) => ({
+      id: v.id,
+      vehicle_name: v.vehicle_name || v.name,
+      plate: v.vehicle_unique_id || v.plate,
+      status: v.status,
+    }));
     fleet.activeTrips = debug.activeTrips ?? 0;
     fleet.locationLogCount = debug.locationLogCount ?? 0;
   }
@@ -111,104 +111,44 @@ app.get("/api/users", (req, res) => {
 });
 
 app.get("/api/health", (_req, res) => {
-  const summary = getStorageSummary();
+  const storage = getStorageHealth();
+  const summary = getFleetSummary();
   res.json({
-    ok: true,
-    database: dbPath,
+    ok: storage.ok,
+    persistentDataDir: storage.persistentDataDir,
+    database: storage.database,
+    dataDir: storage.dataDir,
+    dbExists: storage.dbExists,
+    storageMode: storage.storageMode,
     type: "sqlite",
-    persistentDataDir: !!process.env.FLEET_DATA_DIR,
-    fleet: summary
-      ? {
-          vehicles: summary.vehicles,
-          trips: summary.trips,
-          locationLogs: summary.locationLogs,
-          lastUpdated: summary.lastSnapshot?.updated_at,
-        }
-      : null,
+    realtime: "socket.io",
+    fleet: summary,
   });
 });
 
-/** Full fleet JSON (vehicles, trips, locationLogs, …) */
-app.get("/api/data", (_req, res) => {
-  const data = getSnapshot();
-  if (!data) {
-    return res.status(404).json({ error: "No data seeded yet" });
-  }
-  res.json(data);
-});
-
-app.put("/api/data", (req, res) => {
-  const data = req.body;
-  if (!data?.vehicles || !data?.trips || !data?.locationLogs) {
-    return res.status(400).json({ error: "Invalid fleet payload" });
-  }
-  const updatedAt = saveSnapshot(data);
-
-  for (const trip of data.trips) {
-    upsertTrip(trip);
-  }
-  for (const log of data.locationLogs) {
-    const trip = data.trips.find((t) => t.id === log.trip_id);
-    insertLocationLog(log, log.driver_email || trip?.driver_email || null);
-  }
-
-  res.json({ ok: true, updatedAt });
-});
-
-/** Index driver trips + GPS rows when frontend syncs a single log */
-app.post("/api/location-logs", (req, res) => {
-  const log = req.body;
-  if (!log?.latitude || !log?.longitude) {
-    return res.status(400).json({ error: "Invalid location log" });
-  }
-  insertLocationLog(log, log.driver_email);
-  res.status(201).json({ ok: true, id: log.id });
-});
-
-app.post("/api/trips", (req, res) => {
-  const trip = req.body;
-  if (!trip?.id) return res.status(400).json({ error: "Trip id required" });
-  upsertTrip(trip);
-  res.status(201).json({ ok: true, id: trip.id });
-});
-
-app.patch("/api/trips/:id", (req, res) => {
-  const existing = getSnapshot()?.trips?.find((t) => t.id === req.params.id);
-  if (!existing) return res.status(404).json({ error: "Trip not found" });
-  upsertTrip({ ...existing, ...req.body, id: req.params.id });
-  res.json({ ok: true });
-});
-
-/** Verify driver data is stored in SQLite */
 app.get("/api/debug/driver/:email", (req, res) => {
   const email = decodeURIComponent(req.params.email);
   res.json(getDriverDebug(email));
 });
 
 app.get("/api/debug/storage-summary", (_req, res) => {
-  const data = getSnapshot();
-  if (!data) return res.status(404).json({ error: "No data" });
-  res.json({
-    vehicles: data.vehicles?.length ?? 0,
-    trips: data.trips?.length ?? 0,
-    locationLogs: data.locationLogs?.length ?? 0,
-    geofences: data.geofences?.length ?? 0,
-    databaseFile: dbPath,
-    lastSnapshot: getDriverDebug("admin@fleet.com").lastSnapshot,
-  });
+  res.json({ ...getStorageSummary(), ...getFleetSummary() });
 });
 
-/** Production: serve Vite build (same origin as /api) */
 const distDir = path.join(__dirname, "..", "dist");
 if (fs.existsSync(distDir)) {
   app.use(express.static(distDir));
   app.get("*", (req, res, next) => {
-    if (req.path.startsWith("/api")) return next();
+    if (req.path.startsWith("/api") || req.path.startsWith("/socket.io")) return next();
     res.sendFile(path.join(distDir, "index.html"));
   });
 }
 
-app.listen(PORT, () => {
-  console.log(`FleetTrack API + SQLite: http://localhost:${PORT}`);
-  console.log(`Database file: ${dbPath}`);
+httpServer.listen(PORT, () => {
+  const storage = getStorageHealth();
+  console.log(`FleetTrack API: http://localhost:${PORT}`);
+  console.log(`Realtime: Socket.IO on /socket.io`);
+  if (!storage.persistentDataDir) {
+    console.log(`SQLite (local/ephemeral): ${storage.database}`);
+  }
 });

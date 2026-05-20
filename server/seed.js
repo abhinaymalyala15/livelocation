@@ -1,14 +1,8 @@
-import { getSnapshot, saveSnapshot } from "./db.js";
 import { seedDefaultAdmin } from "./auth.js";
-import { buildInitialStorage } from "./buildSeed.js";
+import { initFleetTables } from "./fleetRepository.js";
 
-/** Empty fleet + default admin account only */
+/** Empty fleet tables + default admin — no demo vehicles */
 export async function seedDatabaseIfEmpty() {
   seedDefaultAdmin();
-
-  if (getSnapshot()) return;
-
-  const data = buildInitialStorage();
-  saveSnapshot(data);
-  console.log("[db] Empty fleet database ready (no demo data)");
+  initFleetTables();
 }

@@ -7,7 +7,9 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
-const dataDir = path.join(root, "data");
+const dataDir = process.env.FLEET_DATA_DIR
+  ? path.resolve(process.env.FLEET_DATA_DIR)
+  : path.join(root, "data");
 if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
 
 for (const name of fs.readdirSync(dataDir)) {

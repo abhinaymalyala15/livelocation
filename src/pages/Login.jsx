@@ -233,7 +233,9 @@ export default function Login() {
           <motion.div className="surface-card p-7 sm:p-8 space-y-6 shadow-xl border-border/80 ring-1 ring-black/[0.03]">
             {apiOk === false && (
               <motion.div className="rounded-lg border border-amber-300 bg-amber-50 text-amber-900 px-3 py-2 text-sm">
-                API server is offline. Run <code className="font-mono text-xs">npm run dev</code> in the project folder (starts API + web).
+                API server is offline. In the project folder run{" "}
+                <code className="font-mono text-xs">npm run dev</code>, then open{" "}
+                <code className="font-mono text-xs">http://127.0.0.1:5173</code>.
               </motion.div>
             )}
             <motion.div className="space-y-1">

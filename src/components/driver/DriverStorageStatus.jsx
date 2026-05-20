@@ -1,17 +1,21 @@
 import { useQuery } from "@tanstack/react-query";
 import { Database, CheckCircle2, AlertCircle } from "lucide-react";
-import { fetchDriverStorageDebug, isDatabaseOnline } from "@/api/persist";
+import { fetchDriverStorageDebug, checkDatabaseHealth } from "@/api/persist";
 import { cn } from "@/lib/utils";
 
 export default function DriverStorageStatus({ driverEmail, tripActive }) {
+  const { data: dbOnline = false } = useQuery({
+    queryKey: ["fleet-backend-health"],
+    queryFn: checkDatabaseHealth,
+    staleTime: 30_000,
+  });
+
   const { data, isFetching, error } = useQuery({
     queryKey: ["driver-storage-debug", driverEmail],
     queryFn: () => fetchDriverStorageDebug(driverEmail),
     enabled: !!driverEmail && tripActive,
-    refetchInterval: tripActive ? 8000 : false,
+    refetchInterval: tripActive ? 15000 : false,
   });
-
-  const dbOnline = isDatabaseOnline();
 
   if (!driverEmail) return null;
 
@@ -31,7 +35,7 @@ export default function DriverStorageStatus({ driverEmail, tripActive }) {
           <span>
             Database server:{" "}
             <span className={cn(dbOnline ? "text-emerald-700" : "text-amber-700", "font-medium")}>
-              {dbOnline ? "Connected (SQLite)" : "Offline - using browser backup only"}
+              {dbOnline ? "Connected (SQLite)" : "Offline — start API server (npm run dev)"}
             </span>
           </span>
         </p>

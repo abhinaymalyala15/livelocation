@@ -1,13 +1,21 @@
 import { useEffect, useRef } from "react";
 import { useGoogleMap } from "@react-google-maps/api";
+import { haversineMeters } from "@/lib/geo";
 
-const ANIMATION_MS = 750;
+const MIN_MS = 450;
+const MAX_MS = 2400;
+const MS_PER_METER = 55;
 
-function easeOutCubic(t) {
-  return 1 - Math.pow(1 - t, 3);
+function easeInOutCubic(t) {
+  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 }
 
-/** Smoothly interpolates marker position when GPS updates */
+function durationForMoveMeters(meters) {
+  if (!Number.isFinite(meters) || meters <= 0) return MIN_MS;
+  return Math.min(MAX_MS, Math.max(MIN_MS, meters * MS_PER_METER));
+}
+
+/** Smoothly interpolates marker between GPS fixes (premium realtime feel) */
 export default function AnimatedVehicleMarker({
   position,
   icon,
@@ -19,6 +27,8 @@ export default function AnimatedVehicleMarker({
   const markerRef = useRef(null);
   const currentRef = useRef(position);
   const rafRef = useRef(null);
+  const clickRef = useRef(onClick);
+  clickRef.current = onClick;
 
   useEffect(() => {
     if (!map || !window.google?.maps || !position) return;
@@ -33,10 +43,9 @@ export default function AnimatedVehicleMarker({
         optimized: false,
         zIndex,
       });
-      if (onClick) {
-        markerRef.current.addListener("click", onClick);
-      }
+      markerRef.current.addListener("click", () => clickRef.current?.());
       return () => {
+        if (rafRef.current) cancelAnimationFrame(rafRef.current);
         markerRef.current?.setMap(null);
         markerRef.current = null;
       };
@@ -44,7 +53,7 @@ export default function AnimatedVehicleMarker({
 
     markerRef.current.setMap(map);
     return undefined;
-  }, [map]);
+  }, [map, position?.lat, position?.lng]);
 
   useEffect(() => {
     markerRef.current?.setIcon(icon);
@@ -58,19 +67,20 @@ export default function AnimatedVehicleMarker({
     const target = { lat: position.lat, lng: position.lng };
     const start = { ...currentRef.current };
 
-    if (
-      Math.abs(start.lat - target.lat) < 1e-7 &&
-      Math.abs(start.lng - target.lng) < 1e-7
-    ) {
+    const dist = haversineMeters(start.lat, start.lng, target.lat, target.lng);
+    if (dist < 0.5) {
+      currentRef.current = target;
+      markerRef.current.setPosition(target);
       return;
     }
 
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    const duration = durationForMoveMeters(dist);
     const t0 = performance.now();
 
     const step = (now) => {
-      const t = Math.min(1, (now - t0) / ANIMATION_MS);
-      const eased = easeOutCubic(t);
+      const t = Math.min(1, (now - t0) / duration);
+      const eased = easeInOutCubic(t);
       currentRef.current = {
         lat: start.lat + (target.lat - start.lat) * eased,
         lng: start.lng + (target.lng - start.lng) * eased,
@@ -78,6 +88,9 @@ export default function AnimatedVehicleMarker({
       markerRef.current?.setPosition(currentRef.current);
       if (t < 1) {
         rafRef.current = requestAnimationFrame(step);
+      } else {
+        currentRef.current = target;
+        rafRef.current = null;
       }
     };
 

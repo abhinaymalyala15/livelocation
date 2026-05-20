@@ -1,19 +1,9 @@
-import fs from "fs";
 import path from "path";
-import { fileURLToPath } from "url";
 import { DatabaseSync } from "node:sqlite";
+import { initStorage } from "./storage.js";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-/** On Render: mount a persistent disk to this path (e.g. FLEET_DATA_DIR=/var/data) */
-const dataDir = process.env.FLEET_DATA_DIR
-  ? path.resolve(process.env.FLEET_DATA_DIR)
-  : path.join(__dirname, "..", "data");
-const dbPath = path.join(dataDir, "fleet.sqlite");
+const { dataDir, dbPath } = initStorage();
 const legacyJsonPath = path.join(dataDir, "fleet-db.json");
-
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
-}
 
 const db = new DatabaseSync(dbPath);
 
@@ -150,6 +140,17 @@ export function saveSnapshot(data) {
   return updatedAt;
 }
 
+function tripMeta(trip) {
+  const meta = {
+    start_location: trip.start_location ?? null,
+    end_location: trip.end_location ?? null,
+    destination: trip.destination ?? null,
+    vehicle_name: trip.vehicle_name ?? null,
+    distance_km: trip.distance_km ?? trip.distance ?? null,
+  };
+  return JSON.stringify(meta);
+}
+
 function tripRow(trip) {
   return {
     id: trip.id,
@@ -163,6 +164,7 @@ function tripRow(trip) {
     start_longitude: trip.start_longitude ?? null,
     end_latitude: trip.end_latitude ?? null,
     end_longitude: trip.end_longitude ?? null,
+    meta: trip.meta ?? tripMeta(trip),
     created_at: trip.created_date ?? trip.created_at ?? new Date().toISOString(),
     updated_at: trip.updated_date ?? trip.updated_at ?? new Date().toISOString(),
   };
@@ -189,29 +191,20 @@ export function upsertTrip(trip) {
     `INSERT INTO trips (
       id, vehicle_id, driver_email, driver_name, status,
       start_time, end_time, start_latitude, start_longitude,
-      end_latitude, end_longitude, created_at, updated_at
+      end_latitude, end_longitude, meta, created_at, updated_at
     ) VALUES (
       @id, @vehicle_id, @driver_email, @driver_name, @status,
       @start_time, @end_time, @start_latitude, @start_longitude,
-      @end_latitude, @end_longitude, @created_at, @updated_at
+      @end_latitude, @end_longitude, @meta, @created_at, @updated_at
     )
     ON CONFLICT(id) DO UPDATE SET
       status = excluded.status,
       end_time = excluded.end_time,
       end_latitude = excluded.end_latitude,
       end_longitude = excluded.end_longitude,
+      meta = excluded.meta,
       updated_at = excluded.updated_at`
   ).run(tripRow(trip));
-
-  const data = getSnapshot();
-  if (!data) return;
-  const idx = data.trips.findIndex((t) => t.id === trip.id);
-  if (idx === -1) data.trips.push(trip);
-  else data.trips[idx] = { ...data.trips[idx], ...trip };
-  const json = JSON.stringify(data);
-  db.prepare(
-    `UPDATE fleet_snapshot SET data = ?, updated_at = ? WHERE id = 1`
-  ).run(json, new Date().toISOString());
 }
 
 export function insertLocationLog(log, driverEmail = null) {
@@ -233,17 +226,6 @@ export function insertLocationLog(log, driverEmail = null) {
       timestamp = excluded.timestamp,
       driver_email = excluded.driver_email`
   ).run(logRow({ ...log, driver_email: email }, email));
-
-  const data = getSnapshot();
-  if (!data) return;
-  const enriched = { ...log, driver_email: email };
-  const idx = data.locationLogs.findIndex((l) => l.id === enriched.id);
-  if (idx === -1) data.locationLogs.push(enriched);
-  else data.locationLogs[idx] = enriched;
-  db.prepare(`UPDATE fleet_snapshot SET data = ?, updated_at = ? WHERE id = 1`).run(
-    JSON.stringify(data),
-    new Date().toISOString()
-  );
 }
 
 export function getDriverDebug(driverEmail) {
@@ -287,14 +269,17 @@ export function getDriverDebug(driverEmail) {
 }
 
 export function getStorageSummary() {
-  const data = getSnapshot();
-  if (!data) return null;
+  const vehicleCount =
+    db.prepare("SELECT COUNT(*) AS c FROM vehicles").get()?.c ??
+    (getSnapshot()?.vehicles?.length ?? 0);
   const lastSnapshot = db.prepare("SELECT updated_at FROM fleet_snapshot WHERE id = 1").get();
   return {
-    vehicles: data.vehicles?.length ?? 0,
-    trips: data.trips?.length ?? 0,
-    locationLogs: data.locationLogs?.length ?? 0,
-    geofences: data.geofences?.length ?? 0,
+    vehicles: vehicleCount,
+    trips: db.prepare("SELECT COUNT(*) AS c FROM trips").get()?.c ?? 0,
+    locationLogs: db.prepare("SELECT COUNT(*) AS c FROM location_logs").get()?.c ?? 0,
+    geofences:
+      db.prepare("SELECT COUNT(*) AS c FROM geofences").get()?.c ??
+      (getSnapshot()?.geofences?.length ?? 0),
     tripsInSql: db.prepare("SELECT COUNT(*) AS c FROM trips").get()?.c ?? 0,
     logsInSql: db.prepare("SELECT COUNT(*) AS c FROM location_logs").get()?.c ?? 0,
     databaseFile: dbPath,

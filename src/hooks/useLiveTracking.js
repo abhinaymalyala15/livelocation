@@ -1,10 +1,16 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { haversineMeters, shouldSendLocationUpdate } from "@/lib/geo";
+import {
+  metersToAccumulate,
+  shouldSendLocationUpdate,
+  isValidGpsCoordinate,
+  GPS_WATCH_OPTIONS,
+} from "@/lib/geo";
 import { sendLocationUpdate } from "@/services/trackingService";
+import { fleetApi } from "@/api/fleetApi";
 
 /**
- * GPS via watchPosition (not setInterval).
- * UI updates every fix; server/mock updates only after 20m move or speed change.
+ * Real GPS via watchPosition (not setInterval).
+ * Server/socket updates only when moved ≥20m, speed, or heading changes significantly.
  */
 export default function useLiveTracking({
   enabled,
@@ -12,28 +18,55 @@ export default function useLiveTracking({
   vehicleId,
   tripId,
   onEvent,
+  onDistanceChange,
 }) {
   const [position, setPosition] = useState(null);
   const [tripPath, setTripPath] = useState([]);
-  const [distanceKm, setDistanceKm] = useState(0);
+  const [tripDistanceKm, setTripDistanceKm] = useState(0);
   const [error, setError] = useState(null);
   const [permissionDenied, setPermissionDenied] = useState(false);
   const [lastSentAt, setLastSentAt] = useState(null);
+  const [gpsAcquiring, setGpsAcquiring] = useState(false);
+  const [watchSession, setWatchSession] = useState(0);
 
   const lastSentRef = useRef(null);
-  const lastUiRef = useRef(null);
+  const lastDistanceAnchorRef = useRef(null);
+  const lastSyncKmRef = useRef(0);
   const watchIdRef = useRef(null);
   const [lastFixAt, setLastFixAt] = useState(null);
   const onEventRef = useRef(onEvent);
+  const onDistanceChangeRef = useRef(onDistanceChange);
   onEventRef.current = onEvent;
+  onDistanceChangeRef.current = onDistanceChange;
 
   const resetPath = useCallback(() => {
     lastSentRef.current = null;
-    lastUiRef.current = null;
+    lastDistanceAnchorRef.current = null;
+    lastSyncKmRef.current = 0;
     setTripPath([]);
-    setDistanceKm(0);
+    setTripDistanceKm(0);
     setLastFixAt(null);
+    setGpsAcquiring(true);
   }, []);
+
+  const retryGps = useCallback(() => {
+    setError(null);
+    setPermissionDenied(false);
+    setGpsAcquiring(true);
+    setWatchSession((n) => n + 1);
+  }, []);
+
+  const syncTripDistance = useCallback(
+    async (km) => {
+      if (!tripId || km <= 0) return;
+      try {
+        await fleetApi.trips.update(tripId, { distance_km: Number(km.toFixed(3)) });
+      } catch {
+        /* retry when distance changes again */
+      }
+    },
+    [tripId]
+  );
 
   const processFix = useCallback(
     async (pos) => {
@@ -46,23 +79,31 @@ export default function useLiveTracking({
         timestamp: new Date().toISOString(),
       };
 
+      if (!isValidGpsCoordinate(coords.latitude, coords.longitude)) return;
+
       setPosition(coords);
       setLastFixAt(coords.timestamp);
+      setGpsAcquiring(false);
+      setError(null);
 
       if (enabled && vehicleId) {
-        const uiPrev = lastUiRef.current;
-        if (uiPrev) {
-          const uiMeters = haversineMeters(
-            uiPrev.latitude,
-            uiPrev.longitude,
-            coords.latitude,
-            coords.longitude
-          );
-          if (uiMeters >= 2) {
-            setDistanceKm((d) => d + uiMeters / 1000);
-          }
+        const anchor = lastDistanceAnchorRef.current;
+        const meters = metersToAccumulate(anchor, coords);
+
+        if (!anchor) {
+          lastDistanceAnchorRef.current = coords;
+        } else if (meters > 0) {
+          lastDistanceAnchorRef.current = coords;
+          setTripDistanceKm((d) => {
+            const next = d + meters / 1000;
+            onDistanceChangeRef.current?.({
+              tripDistanceKm: next,
+              addedMeters: meters,
+              timestamp: coords.timestamp,
+            });
+            return next;
+          });
         }
-        lastUiRef.current = coords;
       }
 
       if (!enabled || !vehicleId) return;
@@ -79,7 +120,7 @@ export default function useLiveTracking({
           vehicleId,
           tripId,
           ...coords,
-          battery: null,
+          saveLog: true,
         });
         lastSentRef.current = coords;
         setLastSentAt(coords.timestamp);
@@ -92,16 +133,30 @@ export default function useLiveTracking({
   );
 
   useEffect(() => {
+    if (!enabled || !tripId || tripDistanceKm <= 0) return undefined;
+    if (Math.abs(tripDistanceKm - lastSyncKmRef.current) < 0.05) return undefined;
+
+    const timer = setTimeout(() => {
+      lastSyncKmRef.current = tripDistanceKm;
+      syncTripDistance(tripDistanceKm);
+    }, 5000);
+
+    return () => clearTimeout(timer);
+  }, [tripDistanceKm, tripId, enabled, syncTripDistance]);
+
+  useEffect(() => {
     if (!enabled) {
       if (watchIdRef.current != null) {
         navigator.geolocation.clearWatch(watchIdRef.current);
         watchIdRef.current = null;
       }
+      setGpsAcquiring(false);
       return;
     }
 
     if (!navigator.geolocation) {
       setError("Geolocation is not supported.");
+      setGpsAcquiring(false);
       return;
     }
 
@@ -109,8 +164,9 @@ export default function useLiveTracking({
     onEventRef.current?.({ type: "tracking_started" });
 
     watchIdRef.current = navigator.geolocation.watchPosition(
-      (pos) => processFix(pos),
+      (fix) => processFix(fix),
       (err) => {
+        setGpsAcquiring(false);
         if (err.code === 1) {
           setPermissionDenied(true);
           setError("Location permission denied.");
@@ -120,7 +176,7 @@ export default function useLiveTracking({
           setError("GPS request timed out.");
         }
       },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+      GPS_WATCH_OPTIONS
     );
 
     return () => {
@@ -129,16 +185,20 @@ export default function useLiveTracking({
         watchIdRef.current = null;
       }
     };
-  }, [enabled, processFix, resetPath]);
+  }, [enabled, processFix, resetPath, watchSession]);
 
   return {
     position,
     tripPath,
-    distanceKm,
+    tripDistanceKm,
+    distanceKm: tripDistanceKm,
     error,
     permissionDenied,
     lastSentAt,
     lastFixAt,
+    gpsAcquiring,
     resetPath,
+    syncTripDistance,
+    retryGps,
   };
 }

@@ -12,7 +12,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { mockSocket } from "@/services/mockSocketService";
+import { getTrackingSocket } from "@/services/socketService";
 import { toast } from "sonner";
 
 export default function SOSPanel({ position, driverId, vehicleId, tripId }) {
@@ -29,7 +29,7 @@ export default function SOSPanel({ position, driverId, vehicleId, tripId }) {
       longitude: position?.longitude,
       timestamp: new Date().toISOString(),
     };
-    mockSocket.emit("emergencyAlert", payload);
+    getTrackingSocket()?.emit("emergencyAlert", payload);
     toast.error("Emergency alert sent to dispatch.");
     setOpen(false);
     setSending(false);

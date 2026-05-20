@@ -1,5 +1,6 @@
 import { useRef, useMemo, useEffect, useCallback } from "react";
-import { GoogleMap, Marker, Circle } from "@react-google-maps/api";
+import { GoogleMap, Marker, Circle, InfoWindow } from "@react-google-maps/api";
+import VehicleMarkerInfo from "./VehicleMarkerInfo";
 import { useGoogleMaps } from "@/components/GoogleMapsProvider";
 import useRoadSnappedPath from "@/hooks/useRoadSnappedPath";
 import RoutePathPolylines from "@/components/tracking/RoutePathPolylines";
@@ -220,6 +221,23 @@ export default function MapView({
           />
         );
       })}
+
+      {selectedVehicle?.latitude != null && selectedVehicle?.longitude != null && (
+        <InfoWindow
+          position={{
+            lat: selectedVehicle.latitude ?? selectedVehicle.current_latitude,
+            lng: selectedVehicle.longitude ?? selectedVehicle.current_longitude,
+          }}
+          options={
+            window.google?.maps
+              ? { pixelOffset: new window.google.maps.Size(0, -36) }
+              : undefined
+          }
+          onCloseClick={() => onSelectVehicle?.(null)}
+        >
+          <VehicleMarkerInfo vehicle={selectedVehicle} tripDistanceKm={tripDistanceKm} />
+        </InfoWindow>
+      )}
     </GoogleMap>
   );
 }

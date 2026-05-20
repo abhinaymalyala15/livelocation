@@ -1,16 +1,23 @@
 # Render Blueprint — https://render.com/docs/blueprint-spec
+# Persistent disk requires a paid Render plan (Starter+). SQLite lives on the mounted volume.
 services:
   - type: web
     name: livelocation
     runtime: node
     region: singapore
-    plan: free
+    plan: starter
     branch: main
     buildCommand: npm install --include=dev && npm run build
     startCommand: npm start
+    disk:
+      name: fleet-data
+      mountPath: /var/data
+      sizeGB: 1
     envVars:
       - key: NODE_ENV
         value: production
+      - key: FLEET_DATA_DIR
+        value: /var/data
       - key: VITE_GOOGLE_MAPS_API_KEY
         sync: false
       - key: VITE_MAP_DEFAULT_LAT

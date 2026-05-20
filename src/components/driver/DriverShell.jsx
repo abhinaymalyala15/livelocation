@@ -15,8 +15,29 @@ export default function DriverShell({
   onLogout,
   activeSection = "dashboard",
   onNav,
+  minimal = false,
 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  if (minimal) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col">
+        <header className="shrink-0 flex items-center justify-between px-4 py-2.5 border-b border-border bg-card">
+          <div className="flex items-center gap-2">
+            <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
+              <Map className="h-4 w-4 text-primary-foreground" />
+            </div>
+            <span className="font-semibold text-sm">FleetTrack</span>
+          </div>
+          <Button variant="ghost" size="sm" className="gap-1.5" onClick={onLogout}>
+            <LogOut className="h-4 w-4" />
+            <span className="hidden sm:inline">Logout</span>
+          </Button>
+        </header>
+        {children}
+      </div>
+    );
+  }
 
   return (
     <motion.div className="min-h-screen bg-background flex">

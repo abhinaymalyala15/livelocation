@@ -20,6 +20,7 @@ data/fleet-db.json
 data/fleet.sqlite
 data/fleet.sqlite-wal
 data/fleet.sqlite-shm
+data-persistent-test/
 dist-ssr
 *.local
 

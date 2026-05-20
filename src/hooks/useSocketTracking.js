@@ -1,30 +1,57 @@
 import { useState, useEffect } from "react";
-import {
-  connectTrackingSocket,
-  disconnectTrackingSocket,
-  mockSocket,
-} from "@/services/trackingService";
+import { useAuth } from "@/lib/AuthContext";
+import { acquireTrackingSocket, releaseTrackingSocket, getTrackingSocket } from "@/services/socketService";
 
-/** Mock realtime connection state (swap for socket.io-client when backend exists). */
-export default function useSocketTracking() {
+/**
+ * Realtime Socket.IO connection (reconnect + live/offline state).
+ */
+export default function useSocketTracking({ role, vehicleId, driverId, enabled = true } = {}) {
+  const { user } = useAuth();
   const [connected, setConnected] = useState(false);
+  const [reconnecting, setReconnecting] = useState(false);
+
+  const resolvedRole = role || user?.role;
+  const resolvedDriverId = driverId || user?.email;
 
   useEffect(() => {
-    let cancelled = false;
-    connectTrackingSocket().then(() => {
-      if (!cancelled) setConnected(mockSocket.isConnected());
-    });
+    if (!enabled || !resolvedRole) return undefined;
 
-    const offConnect = mockSocket.on("connect", () => setConnected(true));
-    const offDisconnect = mockSocket.on("disconnect", () => setConnected(false));
+    let cancelled = false;
+
+    acquireTrackingSocket({
+      role: resolvedRole,
+      vehicleId: resolvedRole === "driver" ? vehicleId : undefined,
+      driverId: resolvedDriverId,
+    })
+      .then(() => {
+        if (!cancelled) setConnected(getTrackingSocket()?.connected ?? false);
+      })
+      .catch(() => {
+        if (!cancelled) setConnected(false);
+      });
+
+    const socket = getTrackingSocket();
+    if (!socket) return () => releaseTrackingSocket();
+
+    const onConnect = () => {
+      setConnected(true);
+      setReconnecting(false);
+    };
+    const onDisconnect = () => setConnected(false);
+    const onReconnect = () => setReconnecting(true);
+
+    socket.on("connect", onConnect);
+    socket.on("disconnect", onDisconnect);
+    socket.io?.on("reconnect_attempt", onReconnect);
 
     return () => {
       cancelled = true;
-      offConnect();
-      offDisconnect();
-      disconnectTrackingSocket();
+      socket.off("connect", onConnect);
+      socket.off("disconnect", onDisconnect);
+      socket.io?.off("reconnect_attempt", onReconnect);
+      releaseTrackingSocket();
     };
-  }, []);
+  }, [enabled, resolvedRole, vehicleId, resolvedDriverId]);
 
-  return connected;
+  return { connected, reconnecting };
 }

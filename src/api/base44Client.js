@@ -1,73 +1,13 @@
-// Mock API Client - Replaces Base44 SDK
-import { getStorageData } from './mockData';
-import { persistFleetData, persistLocationLog, persistTrip } from './persist';
-import {
-  apiLogin,
-  apiMe,
-  apiLogout,
-  getAuthToken,
-} from './authApi';
+import { fleetApi } from "./fleetApi";
+import { apiLogin, apiMe, apiLogout, getAuthToken } from "./authApi";
+import { normalizeVehicle, normalizeVehicles } from "@/lib/normalizeVehicle";
 
-const afterWrite = () => persistFleetData();
-import { normalizeVehicle, normalizeVehicles } from '@/lib/normalizeVehicle';
-import { syncVehicleRoutes } from '@/lib/routeSimulation';
-
-// Simulate network delay
-const delay = (ms = 300) => new Promise(resolve => setTimeout(resolve, ms));
-
-const EMAIL_FIELDS = new Set(["driver_email", "email"]);
-
-function matchesQuery(item, key, value) {
-  if (value == null || value === "") return true;
-  const itemVal = item[key];
-  if (EMAIL_FIELDS.has(key)) {
-    return String(itemVal || "").trim().toLowerCase() === String(value).trim().toLowerCase();
-  }
-  return itemVal === value;
-}
-
-function applyFilter(items, query = {}) {
-  let results = Array.isArray(items) ? items : [];
-  Object.keys(query).forEach((key) => {
-    results = results.filter((item) => matchesQuery(item, key, query[key]));
-  });
-  return results;
-}
-
-const sortList = (items, sortBy, limit) => {
-  const list = Array.isArray(items) ? [...items] : [];
-  if (sortBy) {
-    const desc = String(sortBy).startsWith('-');
-    const field = desc ? String(sortBy).slice(1) : String(sortBy);
-    list.sort((a, b) => {
-      const av = a[field];
-      const bv = b[field];
-      if (av == null && bv == null) return 0;
-      if (av == null) return 1;
-      if (bv == null) return -1;
-      if (field.includes('date') || field.includes('time')) {
-        return desc
-          ? new Date(bv) - new Date(av)
-          : new Date(av) - new Date(bv);
-      }
-      if (av < bv) return desc ? 1 : -1;
-      if (av > bv) return desc ? -1 : 1;
-      return 0;
-    });
-  }
-  if (limit != null) return list.slice(0, limit);
-  return list;
-};
-
-// Mock authentication — start logged out for submission demo (login required)
 let currentUser = null;
 let isAuthenticated = false;
 
-const mockApiClient = {
-  // Auth methods
+const apiClient = {
   auth: {
     me: async () => {
-      await delay(50);
       const token = getAuthToken();
       if (token) {
         try {
@@ -80,369 +20,108 @@ const mockApiClient = {
         }
       }
       if (!isAuthenticated || !currentUser) {
-        throw { status: 401, message: 'Not authenticated' };
+        throw { status: 401, message: "Not authenticated" };
       }
       return { ...currentUser };
     },
-    
+
     login: async (email, password) => {
-      await delay(50);
       const user = await apiLogin(email, password);
       currentUser = user;
       isAuthenticated = true;
       return { ...user };
     },
-    
+
     logout: async () => {
-      await delay(50);
       await apiLogout();
       currentUser = null;
       isAuthenticated = false;
     },
-    
+
     redirectToLogin: (returnUrl) => {
       window.location.href = `/login?return=${encodeURIComponent(returnUrl)}`;
     },
   },
 
-  // Vehicle entity methods
   entities: {
     Vehicle: {
-      list: async (sortBy, limit) => {
-        await delay();
-        return normalizeVehicles(sortList(getStorageData().vehicles, sortBy, limit));
-      },
-      
-      filter: async (query = {}) => {
-        await delay();
-        return normalizeVehicles(applyFilter(getStorageData().vehicles, query));
-      },
-      
-      get: async (id) => {
-        await delay();
-        const v = getStorageData().vehicles.find(veh => veh.id === id);
-        return normalizeVehicle(v);
-      },
-      
-      create: async (data) => {
-        await delay();
-        const payload = { ...data };
-        if (payload.driver_email) {
-          payload.driver_email = String(payload.driver_email).trim().toLowerCase();
-        }
-        const newVehicle = {
-          id: 'vehicle_' + Date.now(),
-          ...payload,
-          created_date: new Date().toISOString(),
-          updated_date: new Date().toISOString(),
-        };
-        getStorageData().vehicles.push(newVehicle);
-        await afterWrite();
-        return newVehicle;
-      },
-      
-      update: async (id, data) => {
-        await delay();
-        const vehicles = getStorageData().vehicles;
-        const idx = vehicles.findIndex(v => v.id === id);
-        if (idx === -1) throw { status: 404, message: 'Vehicle not found' };
-        const payload = { ...data };
-        if (payload.driver_email) {
-          payload.driver_email = String(payload.driver_email).trim().toLowerCase();
-        }
-        vehicles[idx] = { ...vehicles[idx], ...payload, updated_date: new Date().toISOString() };
-        await afterWrite();
-        return vehicles[idx];
-      },
-      
-      delete: async (id) => {
-        await delay();
-        const vehicles = getStorageData().vehicles;
-        const idx = vehicles.findIndex(v => v.id === id);
-        if (idx === -1) throw { status: 404, message: 'Vehicle not found' };
-        const removed = vehicles.splice(idx, 1)[0];
-        await afterWrite();
-        return removed;
-      },
-      
-      subscribe: (callback) => {
-        const tick = () => {
-          const data = getStorageData();
-          syncVehicleRoutes(data.vehicles, data.locationLogs, data.trips);
-          // Positions come from real driver GPS — no demo simulation
-          callback(normalizeVehicles(data.vehicles));
-        };
-
-        tick();
-        const interval = setInterval(tick, 1200);
-        return () => clearInterval(interval);
-      },
+      list: async (sortBy, limit) =>
+        normalizeVehicles(await fleetApi.vehicles.list(sortBy, limit)),
+      filter: async (query = {}) =>
+        normalizeVehicles(await fleetApi.vehicles.filter(query)),
+      get: async (id) => normalizeVehicle(await fleetApi.vehicles.get(id)),
+      create: async (data) => normalizeVehicle(await fleetApi.vehicles.create(data)),
+      update: async (id, data) => normalizeVehicle(await fleetApi.vehicles.update(id, data)),
+      delete: async (id) => fleetApi.vehicles.delete(id),
+      subscribe: () => () => {},
     },
 
     Trip: {
-      list: async (sortBy, limit) => {
-        await delay();
-        return sortList(getStorageData().trips, sortBy, limit);
-      },
-      
-      filter: async (query = {}) => {
-        await delay();
-        return applyFilter(getStorageData().trips, query);
-      },
-      
-      get: async (id) => {
-        await delay();
-        return getStorageData().trips.find(t => t.id === id);
-      },
-      
-      create: async (data) => {
-        await delay();
-        const newTrip = {
-          id: 'trip_' + Date.now(),
-          ...data,
-          created_date: new Date().toISOString(),
-          updated_date: new Date().toISOString(),
-        };
-        getStorageData().trips.push(newTrip);
-        await afterWrite();
-        await persistTrip(newTrip, true);
-        return newTrip;
-      },
-      
-      update: async (id, data) => {
-        await delay();
-        const trips = getStorageData().trips;
-        const idx = trips.findIndex(t => t.id === id);
-        if (idx === -1) throw { status: 404, message: 'Trip not found' };
-        trips[idx] = { ...trips[idx], ...data, updated_date: new Date().toISOString() };
-        return trips[idx];
-      },
-      
-      delete: async (id) => {
-        await delay();
-        const trips = getStorageData().trips;
-        const idx = trips.findIndex(t => t.id === id);
-        if (idx === -1) throw { status: 404, message: 'Trip not found' };
-        return trips.splice(idx, 1)[0];
-      },
+      list: async (sortBy, limit) => fleetApi.trips.list(sortBy, limit),
+      filter: async (query = {}) => fleetApi.trips.filter(query),
+      get: async (id) => fleetApi.trips.get(id),
+      create: async (data) => fleetApi.trips.create(data),
+      update: async (id, data) => fleetApi.trips.update(id, data),
+      delete: async (id) => fleetApi.trips.delete(id),
     },
 
     LocationLog: {
-      list: async () => {
-        await delay();
-        return getStorageData().locationLogs;
-      },
-      
-      filter: async (query = {}, sortBy = null, limit = 100) => {
-        await delay();
-        let results = applyFilter(getStorageData().locationLogs, query);
-        
-        if (sortBy) {
-          results.sort((a, b) => {
-            if (sortBy === 'created_date' || sortBy === 'timestamp') {
-              return new Date(b[sortBy]) - new Date(a[sortBy]);
-            }
-            return b[sortBy] - a[sortBy];
-          });
-        }
-        
-        return results.slice(0, limit);
-      },
-      
-      create: async (data) => {
-        await delay();
-        const newLog = {
-          id: 'log_' + Date.now(),
-          ...data,
-          timestamp: new Date().toISOString(),
-        };
-        getStorageData().locationLogs.push(newLog);
-        const trip = getStorageData().trips.find((t) => t.id === data.trip_id);
-        const driverEmail = data.driver_email || trip?.driver_email || null;
-        await afterWrite();
-        await persistLocationLog(newLog, driverEmail);
-        return newLog;
+      list: async () => fleetApi.locationLogs.list(),
+      filter: async (query = {}, sortBy = null, limit = 100) =>
+        fleetApi.locationLogs.filter(query, sortBy, limit),
+      create: async () => {
+        throw new Error("Location logs are created via /api/fleet/tracking/location");
       },
     },
 
     Geofence: {
-      list: async () => {
-        await delay();
-        return getStorageData().geofences;
-      },
-      
-      filter: async (query = {}) => {
-        await delay();
-        let results = getStorageData().geofences;
-        Object.keys(query).forEach(key => {
-          results = results.filter(item => item[key] === query[key]);
-        });
-        return results;
-      },
-      
-      get: async (id) => {
-        await delay();
-        return getStorageData().geofences.find(g => g.id === id);
-      },
-      
-      create: async (data) => {
-        await delay();
-        const newGeofence = {
-          id: 'geofence_' + Date.now(),
-          ...data,
-          created_date: new Date().toISOString(),
-          updated_date: new Date().toISOString(),
-        };
-        getStorageData().geofences.push(newGeofence);
-        return newGeofence;
-      },
-      
-      update: async (id, data) => {
-        await delay();
-        const geofences = getStorageData().geofences;
-        const idx = geofences.findIndex(g => g.id === id);
-        if (idx === -1) throw { status: 404, message: 'Geofence not found' };
-        geofences[idx] = { ...geofences[idx], ...data, updated_date: new Date().toISOString() };
-        return geofences[idx];
-      },
-      
-      delete: async (id) => {
-        await delay();
-        const geofences = getStorageData().geofences;
-        const idx = geofences.findIndex(g => g.id === id);
-        if (idx === -1) throw { status: 404, message: 'Geofence not found' };
-        return geofences.splice(idx, 1)[0];
-      },
+      list: async () => fleetApi.geofences.list(),
+      filter: async (query = {}) => fleetApi.geofences.filter(query),
+      get: async (id) => fleetApi.geofences.get(id),
+      create: async (data) => fleetApi.geofences.create(data),
+      update: async (id, data) => fleetApi.geofences.update(id, data),
+      delete: async (id) => fleetApi.geofences.delete(id),
     },
 
     MaintenanceLog: {
-      list: async () => {
-        await delay();
-        return getStorageData().maintenance;
-      },
-      
-      filter: async (query = {}) => {
-        await delay();
-        let results = getStorageData().maintenance;
-        Object.keys(query).forEach(key => {
-          results = results.filter(item => item[key] === query[key]);
-        });
-        return results;
-      },
-      
-      create: async (data) => {
-        await delay();
-        const newMaint = {
-          id: 'maint_' + Date.now(),
-          ...data,
-          created_date: new Date().toISOString(),
-          updated_date: new Date().toISOString(),
-        };
-        getStorageData().maintenance.push(newMaint);
-        return newMaint;
-      },
-      
-      update: async (id, data) => {
-        await delay();
-        const maintenance = getStorageData().maintenance;
-        const idx = maintenance.findIndex(m => m.id === id);
-        if (idx === -1) throw { status: 404, message: 'Maintenance log not found' };
-        maintenance[idx] = { ...maintenance[idx], ...data, updated_date: new Date().toISOString() };
-        return maintenance[idx];
-      },
-      
-      delete: async (id) => {
-        await delay();
-        const maintenance = getStorageData().maintenance;
-        const idx = maintenance.findIndex(m => m.id === id);
-        if (idx === -1) throw { status: 404, message: 'Maintenance log not found' };
-        return maintenance.splice(idx, 1)[0];
-      },
+      list: async () => fleetApi.maintenance.list(),
+      filter: async (query = {}) => fleetApi.maintenance.filter(query),
+      create: async (data) => fleetApi.maintenance.create(data),
+      update: async (id, data) => fleetApi.maintenance.update(id, data),
+      delete: async (id) => fleetApi.maintenance.delete(id),
     },
 
     ReportSchedule: {
-      list: async (sortBy, limit) => {
-        await delay();
-        return sortList(getStorageData().reportSchedules ?? [], sortBy, limit);
-      },
-      
-      filter: async (query = {}) => {
-        await delay();
-        let results = getStorageData().reportSchedules;
-        Object.keys(query).forEach(key => {
-          results = results.filter(item => item[key] === query[key]);
-        });
-        return results;
-      },
-      
-      create: async (data) => {
-        await delay();
-        const newReport = {
-          id: 'report_' + Date.now(),
-          ...data,
-          created_date: new Date().toISOString(),
-          updated_date: new Date().toISOString(),
-        };
-        getStorageData().reportSchedules.push(newReport);
-        return newReport;
-      },
-      
-      delete: async (id) => {
-        await delay();
-        const reports = getStorageData().reportSchedules;
-        const idx = reports.findIndex(r => r.id === id);
-        if (idx === -1) throw { status: 404, message: 'Report schedule not found' };
-        return reports.splice(idx, 1)[0];
-      },
+      list: async (sortBy, limit) => fleetApi.reportSchedules.list(sortBy, limit),
+      filter: async (query = {}) => fleetApi.reportSchedules.filter(query),
+      create: async (data) => fleetApi.reportSchedules.create(data),
+      delete: async (id) => fleetApi.reportSchedules.delete(id),
     },
   },
 
-  // Functions (async operations)
   functions: {
     invoke: async (functionName, params = {}) => {
-      await delay(500);
-      
-      if (functionName === 'generateTripReport') {
-        // Mock PDF generation
-        const trip = await mockApiClient.entities.Trip.get(params.trip_id);
-        const logs = await mockApiClient.entities.LocationLog.filter({ trip_id: params.trip_id });
-        
-        const reportData = {
-          trip,
-          locationLogs: logs,
-          generatedAt: new Date().toISOString(),
-        };
-        
+      if (functionName === "generateTripReport") {
+        const trip = await fleetApi.trips.get(params.trip_id);
+        const locationLogs = await fleetApi.locationLogs.filter(
+          { trip_id: params.trip_id },
+          null,
+          5000
+        );
         return {
-          data: JSON.stringify(reportData),
+          data: JSON.stringify({ trip, locationLogs, generatedAt: new Date().toISOString() }),
           status: 200,
         };
       }
-      
-      if (functionName === 'sendWeeklyFleetReport') {
-        return {
-          data: { message: 'Weekly report sent to all admins' },
-          status: 200,
-        };
+      if (functionName === "sendWeeklyFleetReport") {
+        return { data: { message: "Weekly report sent to all admins" }, status: 200 };
       }
-      
       throw { status: 404, message: `Function ${functionName} not found` };
     },
   },
-
 };
 
-mockApiClient.asServiceRole = {
-  entities: {
-    Vehicle: mockApiClient.entities.Vehicle,
-    Trip: mockApiClient.entities.Trip,
-    LocationLog: mockApiClient.entities.LocationLog,
-    Geofence: mockApiClient.entities.Geofence,
-    MaintenanceLog: mockApiClient.entities.MaintenanceLog,
-    ReportSchedule: mockApiClient.entities.ReportSchedule,
-  },
-};
+apiClient.asServiceRole = { entities: apiClient.entities };
 
-export const base44 = mockApiClient;
-
-export default mockApiClient;
+export const base44 = apiClient;
+export default apiClient;

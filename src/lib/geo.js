@@ -1,3 +1,10 @@
+/** Minimum GPS movement before adding to trip / today distance */
+export const MIN_TRIP_DISTANCE_METERS = 10;
+/** Ignore fixes worse than this (reduces parking-lot jitter) */
+export const MAX_GPS_ACCURACY_METERS = 75;
+/** Ignore single-fix teleports (bad GPS spikes) */
+export const MAX_GPS_JUMP_METERS = 400;
+
 /** Distance in meters between two lat/lng points */
 export function haversineMeters(lat1, lng1, lat2, lng2) {
   const R = 6371000;
@@ -19,12 +26,58 @@ export function computeBearing(from, to) {
   return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
 }
 
-const MIN_MOVE_METERS = 20;
-const MIN_SPEED_DELTA_KMH = 8;
+/** Fleet transmit thresholds (server + socket) */
+export const GPS_TRANSMIT_MIN_METERS = 20;
+export const GPS_TRANSMIT_MIN_SPEED_DELTA_KMH = 8;
+export const GPS_TRANSMIT_MIN_HEADING_DELTA_DEG = 25;
+
+/** watchPosition options — balance accuracy vs battery */
+export const GPS_WATCH_OPTIONS = {
+  enableHighAccuracy: true,
+  timeout: 15000,
+  maximumAge: 10000,
+};
+
+export function isValidGpsCoordinate(latitude, longitude) {
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return false;
+  if (Math.abs(latitude) > 90 || Math.abs(longitude) > 180) return false;
+  if (latitude === 0 && longitude === 0) return false;
+  return true;
+}
+
+export function isAcceptableGpsAccuracy(accuracyMeters) {
+  if (accuracyMeters == null || !Number.isFinite(accuracyMeters)) return true;
+  return accuracyMeters > 0 && accuracyMeters <= MAX_GPS_ACCURACY_METERS;
+}
+
+function headingDeltaDegrees(prevHeading, nextHeading) {
+  const a = Number(prevHeading) || 0;
+  const b = Number(nextHeading) || 0;
+  const d = Math.abs(a - b) % 360;
+  return d > 180 ? 360 - d : d;
+}
 
 /**
- * Send GPS update only if moved enough or speed changed significantly (saves bandwidth).
+ * Send location to server/socket only when movement or telemetry meaningfully changed.
  */
+export function shouldSendLocationUpdate(prev, next) {
+  if (!next || !isValidGpsCoordinate(next.latitude, next.longitude)) return false;
+  if (!isAcceptableGpsAccuracy(next.accuracy)) return false;
+  if (!prev) return true;
+
+  const moved = haversineMeters(prev.latitude, prev.longitude, next.latitude, next.longitude);
+  if (moved >= GPS_TRANSMIT_MIN_METERS) return true;
+
+  const speedDelta = Math.abs((next.speed ?? 0) - (prev.speed ?? 0));
+  if (speedDelta >= GPS_TRANSMIT_MIN_SPEED_DELTA_KMH) return true;
+
+  if (headingDeltaDegrees(prev.heading, next.heading) >= GPS_TRANSMIT_MIN_HEADING_DELTA_DEG) {
+    return true;
+  }
+
+  return false;
+}
+
 /** Sum path distance in km */
 export function computePathDistanceKm(points) {
   if (!Array.isArray(points) || points.length < 2) return 0;
@@ -42,11 +95,21 @@ export function computePathDistanceKm(points) {
   return meters / 1000;
 }
 
-export function shouldSendLocationUpdate(prev, next) {
-  if (!prev) return true;
-  const moved = haversineMeters(prev.latitude, prev.longitude, next.latitude, next.longitude);
-  if (moved >= MIN_MOVE_METERS) return true;
-  const speedDelta = Math.abs((next.speed ?? 0) - (prev.speed ?? 0));
-  if (speedDelta >= MIN_SPEED_DELTA_KMH) return true;
-  return false;
+/**
+ * Meters to add to trip/today totals (0 if fix is noisy, invalid, or < MIN_TRIP_DISTANCE_METERS).
+ */
+export function metersToAccumulate(prev, next) {
+  if (!next || !isValidGpsCoordinate(next.latitude, next.longitude)) return 0;
+  if (!isAcceptableGpsAccuracy(next.accuracy)) return 0;
+  if (!prev) return 0;
+
+  const meters = haversineMeters(
+    prev.latitude,
+    prev.longitude,
+    next.latitude,
+    next.longitude
+  );
+  if (!Number.isFinite(meters) || meters >= MAX_GPS_JUMP_METERS) return 0;
+  if (meters < MIN_TRIP_DISTANCE_METERS) return 0;
+  return meters;
 }

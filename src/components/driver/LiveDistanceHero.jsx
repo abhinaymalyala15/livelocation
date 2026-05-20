@@ -1,4 +1,5 @@
-import { Route, Gauge } from "lucide-react";
+import { motion } from "framer-motion";
+import { CalendarDays, Route, Gauge } from "lucide-react";
 import useAnimatedNumber from "@/hooks/useAnimatedNumber";
 import { resolveDriverMotionStatus, statusColors } from "@/lib/vehicleStatus";
 import { cn } from "@/lib/utils";
@@ -6,31 +7,48 @@ import { formatLastUpdated } from "@/hooks/useLiveClock";
 import useLiveClock from "@/hooks/useLiveClock";
 
 export default function LiveDistanceHero({
-  distanceKm = 0,
+  todayDistanceKm = 0,
+  tripDistanceKm = 0,
   speed = 0,
   lastFixAt,
   tracking = false,
+  tripActive = false,
 }) {
   const now = useLiveClock(1000);
-  const animatedKm = useAnimatedNumber(distanceKm, { duration: 500, decimals: 2 });
+  const animatedToday = useAnimatedNumber(todayDistanceKm, { duration: 550, decimals: 2 });
+  const animatedTrip = useAnimatedNumber(tripDistanceKm, { duration: 450, decimals: 2 });
   const motionState = resolveDriverMotionStatus(speed, lastFixAt, tracking);
   const style = statusColors[motionState] || statusColors.ready;
   const lastText = lastFixAt ? formatLastUpdated(lastFixAt, now) : "Waiting for GPS…";
 
   return (
-    <div className="rounded-2xl border border-border/80 bg-card/95 backdrop-blur-md shadow-xl ring-1 ring-black/5 overflow-hidden">
-      <div className="bg-gradient-to-br from-primary/10 via-card to-card px-4 py-4 sm:px-5 sm:py-5">
-        <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
-          <Route className="h-3.5 w-3.5 text-primary" />
-          Trip distance
+    <motion.div
+      layout
+      className="rounded-2xl border border-border/80 bg-card/95 backdrop-blur-md shadow-xl ring-1 ring-black/5 overflow-hidden"
+    >
+      <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white px-5 py-5 sm:py-6">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-white/70 flex items-center gap-2">
+          <CalendarDays className="h-3.5 w-3.5" />
+          Today&apos;s Distance
         </p>
-        <p className="mt-1 text-4xl sm:text-5xl font-bold tabular-nums tracking-tight text-foreground">
-          {animatedKm}
-          <span className="text-xl sm:text-2xl font-semibold text-muted-foreground ml-2">KM</span>
+        <p className="mt-2 text-5xl sm:text-6xl font-bold tabular-nums tracking-tight leading-none">
+          {animatedToday}
+          <span className="text-2xl sm:text-3xl font-semibold text-white/80 ml-2">KM</span>
         </p>
+        {tripActive && (
+          <motion.p
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mt-3 text-sm text-white/75 flex items-center gap-2"
+          >
+            <Route className="h-3.5 w-3.5 text-emerald-400" />
+            This trip ·{" "}
+            <span className="font-semibold text-white tabular-nums">{animatedTrip} km</span>
+          </motion.p>
+        )}
       </div>
 
-      <div className="grid grid-cols-2 divide-x divide-border border-t border-border text-sm">
+      <div className="grid grid-cols-2 divide-x divide-border border-t border-border text-sm bg-card">
         <div className="px-4 py-3 flex items-center gap-2">
           <Gauge className="h-4 w-4 text-primary shrink-0" />
           <div>
@@ -56,8 +74,11 @@ export default function LiveDistanceHero({
       </div>
 
       <p className="px-4 py-2 text-[11px] text-muted-foreground border-t border-border bg-muted/30 tabular-nums">
-        Last GPS fix · {lastText}
+        Live GPS · {lastText}
+        {tracking && (
+          <span className="text-muted-foreground/80"> · updates when moving 20m+</span>
+        )}
       </p>
-    </div>
+    </motion.div>
   );
 }

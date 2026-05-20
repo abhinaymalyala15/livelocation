@@ -1,81 +1,84 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
 import useLiveTracking from "@/hooks/useLiveTracking";
+import useDriverDayDistance from "@/hooks/useDriverDayDistance";
 import useSocketTracking from "@/hooks/useSocketTracking";
+import useTrackingConnectivity from "@/hooks/useTrackingConnectivity";
+import { formatLastUpdated } from "@/hooks/useLiveClock";
 import useLiveClock from "@/hooks/useLiveClock";
 import Loader from "@/components/tracking/Loader";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import DriverShell from "@/components/driver/DriverShell";
-import DriverHeader from "@/components/driver/DriverHeader";
-import DriverLiveStatusBar from "@/components/driver/DriverLiveStatusBar";
+import DriverGpsStrip from "@/components/driver/DriverGpsStrip";
 import LiveDistanceHero from "@/components/driver/LiveDistanceHero";
-import DriverInfoCard from "@/components/driver/DriverInfoCard";
 import DriverLiveMap from "@/components/driver/DriverLiveMap";
-import TripControls from "@/components/driver/TripControls";
-import TripStats from "@/components/driver/TripStats";
-import DeviceStatus from "@/components/driver/DeviceStatus";
-import EventTimeline from "@/components/driver/EventTimeline";
-import SOSPanel from "@/components/driver/SOSPanel";
-import DriverStorageStatus from "@/components/driver/DriverStorageStatus";
+import DriverSimpleControls from "@/components/driver/DriverSimpleControls";
+import TrackingStatusBanner from "@/components/driver/TrackingStatusBanner";
 import DriverOnboarding from "@/components/driver/DriverOnboarding";
-import { reloadFleetData } from "@/api/persist";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { getTrackingSocket } from "@/services/socketService";
 
 export default function DriverDashboard() {
   const navigate = useNavigate();
   const { user, logout, checkAppState } = useAuth();
   const queryClient = useQueryClient();
-  const [section, setSection] = useState("dashboard");
   const [selectedVehicleId, setSelectedVehicleId] = useState("");
   const [tripStatus, setTripStatus] = useState("idle");
   const [activeTripId, setActiveTripId] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [events, setEvents] = useState([]);
+  const [sosOpen, setSosOpen] = useState(false);
   const tripStartRef = useRef(null);
+  const now = useLiveClock(1000);
 
-  const socketConnected = useSocketTracking();
+  const { connected: socketConnected, reconnecting: socketReconnecting } = useSocketTracking({
+    role: "driver",
+    vehicleId: selectedVehicleId,
+    driverId: user?.email,
+    enabled: !!user?.email,
+  });
+
   const trackingEnabled = tripStatus === "active" && !!selectedVehicleId;
-
-  const pushEvent = useCallback((message) => {
-    setEvents((prev) => [
-      { id: `${Date.now()}-${Math.random()}`, message, at: new Date().toISOString() },
-      ...prev,
-    ]);
-  }, []);
-
-  const onTrackingEvent = useCallback(
-    (ev) => {
-      if (ev.type === "tracking_started") pushEvent("GPS tracking started");
-      if (ev.type === "location_sent") pushEvent("Location shared with fleet");
-      if (ev.type === "gps_error") pushEvent("GPS error");
-    },
-    [pushEvent]
-  );
 
   const {
     position,
     tripPath,
-    distanceKm,
+    tripDistanceKm,
     error: geoError,
     permissionDenied,
     lastSentAt,
     lastFixAt,
+    syncTripDistance,
+    retryGps,
   } = useLiveTracking({
     enabled: trackingEnabled,
     driverId: user?.email,
     vehicleId: selectedVehicleId,
     tripId: activeTripId,
-    onEvent: onTrackingEvent,
+  });
+
+  const tripActive = tripStatus === "active";
+  const { todayTotalKm } = useDriverDayDistance(user?.email, tripDistanceKm, tripActive);
+
+  const connectivity = useTrackingConnectivity({
+    trackingEnabled,
+    gpsError: geoError,
+    permissionDenied,
+    lastFixAt,
+    hasPosition: !!position,
+    socketConnected,
+    socketReconnecting,
   });
 
   const { data: vehicles = [], isLoading: loadingVehicles } = useQuery({
@@ -100,21 +103,6 @@ export default function DriverDashboard() {
     }
   }, [selectedVehicleId, vehicles]);
 
-  useLiveClock(5000);
-
-  useEffect(() => {
-    if (section === "sos") {
-      document.getElementById("sos")?.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [section]);
-
-  const selectedVehicle = vehicles.find((v) => v.id === selectedVehicleId);
-
-  const durationMin =
-    tripStartRef.current && tripStatus !== "idle"
-      ? Math.floor((Date.now() - tripStartRef.current) / 60000)
-      : 0;
-
   const handleStartTrip = async () => {
     if (!selectedVehicleId) {
       toast.error("Select a vehicle");
@@ -136,58 +124,58 @@ export default function DriverDashboard() {
       await base44.entities.Vehicle.update(selectedVehicleId, {
         status: "on_trip",
         current_trip_id: trip.id,
-        current_destination: "",
       });
       setActiveTripId(trip.id);
       setTripStatus("active");
       tripStartRef.current = Date.now();
-      pushEvent("Trip started");
-      toast.success("Trip started — sharing live location");
+      toast.success("Trip started");
       queryClient.invalidateQueries({ queryKey: ["driver-vehicles"] });
     } finally {
       setLoading(false);
     }
-  };
-
-  const handlePause = () => {
-    setTripStatus("paused");
-    pushEvent("Trip paused");
-    toast.message("Trip paused");
-  };
-
-  const handleResume = () => {
-    setTripStatus("active");
-    pushEvent("Trip resumed");
-    toast.success("Trip resumed");
   };
 
   const handleEndTrip = async () => {
     setLoading(true);
     try {
       if (activeTripId) {
+        await syncTripDistance(tripDistanceKm);
         await base44.entities.Trip.update(activeTripId, {
           end_time: new Date().toISOString(),
           status: "completed",
           end_latitude: position?.latitude,
           end_longitude: position?.longitude,
+          distance_km: Number(tripDistanceKm.toFixed(3)),
         });
       }
       await base44.entities.Vehicle.update(selectedVehicleId, {
         status: "available",
         current_trip_id: "",
-        current_destination: "",
         current_speed: 0,
       });
       setTripStatus("idle");
       setActiveTripId(null);
       tripStartRef.current = null;
-      pushEvent("Trip ended");
       toast.success("Trip completed");
       queryClient.invalidateQueries({ queryKey: ["driver-vehicles"] });
+      queryClient.invalidateQueries({ queryKey: ["driver-trips-day"] });
     } finally {
       setLoading(false);
     }
   };
+
+  const sendSOS = useCallback(() => {
+    getTrackingSocket()?.emit("emergencyAlert", {
+      driverId: user.email,
+      vehicleId: selectedVehicleId,
+      tripId: activeTripId,
+      latitude: position?.latitude,
+      longitude: position?.longitude,
+      timestamp: new Date().toISOString(),
+    });
+    toast.error("Emergency alert sent");
+    setSosOpen(false);
+  }, [user?.email, selectedVehicleId, activeTripId, position]);
 
   const handleLogout = async () => {
     await logout();
@@ -196,19 +184,15 @@ export default function DriverDashboard() {
 
   if (!user) return <Loader text="Loading..." />;
 
-  const needsSetup = !loadingVehicles && vehicles.length === 0;
-
-  if (needsSetup) {
+  if (!loadingVehicles && vehicles.length === 0) {
     return (
-      <DriverShell user={user} onLogout={handleLogout}>
+      <DriverShell user={user} onLogout={handleLogout} minimal>
         <main className="flex-1 p-6 flex items-center justify-center">
           <DriverOnboarding
             user={user}
             onComplete={async () => {
-              await reloadFleetData();
               await checkAppState();
               queryClient.invalidateQueries({ queryKey: ["driver-vehicles"] });
-              queryClient.invalidateQueries({ queryKey: ["admin-vehicles"] });
             }}
           />
         </main>
@@ -216,152 +200,92 @@ export default function DriverDashboard() {
     );
   }
 
-  const gpsOk = trackingEnabled && !!position && !geoError;
-  const offline = !socketConnected || (trackingEnabled && !lastSentAt && !position);
+  const lastFixLabel = lastFixAt
+    ? formatLastUpdated(lastFixAt, now)
+    : trackingEnabled
+      ? "Acquiring…"
+      : "—";
 
   return (
-    <DriverShell
-      user={user}
-      activeSection={section}
-      onNav={setSection}
-      onLogout={handleLogout}
-    >
-      <DriverLiveStatusBar
-        tripActive={tripStatus === "active" || tripStatus === "paused"}
-        gpsActive={gpsOk}
-        socketConnected={socketConnected && !offline}
-        lastFixAt={lastFixAt || lastSentAt}
-        className="md:hidden sticky top-0 z-20"
-      />
+    <DriverShell user={user} onLogout={handleLogout} minimal>
+      <div className="flex-1 flex flex-col min-h-0 max-h-[100dvh]">
+        <DriverGpsStrip
+          tripActive={tripActive}
+          gpsOk={connectivity.gpsOk}
+          online={connectivity.online}
+          socketConnected={socketConnected}
+          reconnecting={socketReconnecting}
+          lastFixLabel={lastFixLabel}
+        />
 
-      <DriverHeader
-        tripStatus={tripStatus}
-        gpsActive={gpsOk}
-        socketConnected={socketConnected && !offline}
-        lastFixAt={lastFixAt || lastSentAt}
-        userName={user.display_name || user.name}
-      />
-
-      <motion.main
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        className="flex-1 flex flex-col p-0 md:p-6 md:space-y-4 max-w-6xl mx-auto w-full min-h-0"
-      >
-        <div className="px-4 md:px-0 space-y-4 md:space-y-4 pt-3 md:pt-0">
-        {offline && tripStatus === "active" && (
-          <motion.div className="rounded-lg border border-amber-300 bg-amber-50 text-amber-900 px-4 py-2 text-sm">
-            Connection or GPS weak — trying to reconnect…
-          </motion.div>
-        )}
-
-        {(permissionDenied || geoError) && (
-          <motion.div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-            {permissionDenied
-              ? "Enable location permission in your browser to track trips."
-              : geoError}
-          </motion.div>
-        )}
-
-        <div className="hidden md:block">
-          <DriverInfoCard
-            user={user}
-            vehicle={selectedVehicle}
-            tripStatus={tripStatus}
+        <div className="px-3 pt-2 shrink-0 space-y-2">
+          <TrackingStatusBanner
+            status={connectivity.status}
+            message={connectivity.message}
+            isOffline={connectivity.isOffline}
+            onRetry={connectivity.canRetry ? retryGps : undefined}
           />
+          {(permissionDenied || geoError) && (
+            <p className="text-xs text-destructive px-1">
+              {permissionDenied ? "Enable location in browser settings." : geoError}
+            </p>
+          )}
         </div>
 
-        <motion.div className="grid lg:grid-cols-3 gap-4">
-          <motion.div className="lg:col-span-2 space-y-4">
-            <div className="relative -mx-4 md:mx-0 min-h-[min(52dvh,420px)] md:min-h-[420px]">
-              <DriverLiveMap
-                position={position}
-                tripPath={tripPath}
-                tracking={trackingEnabled}
-                className="absolute inset-0 rounded-none md:rounded-xl"
-              />
-              {trackingEnabled && (
-                <div className="absolute bottom-4 left-4 right-4 z-10 md:max-w-md">
-                  <LiveDistanceHero
-                    distanceKm={distanceKm}
-                    speed={position?.speed}
-                    lastFixAt={lastFixAt || lastSentAt}
-                    tracking={trackingEnabled}
-                  />
-                </div>
-              )}
-            </div>
-
-            <motion.div className="grid sm:grid-cols-2 gap-4">
-              <motion.div className="surface-card rounded-xl border border-border p-4 space-y-3">
-                <h3 className="text-sm font-medium">Vehicle</h3>
-                {loadingVehicles ? (
-                  <Loader text="Loading…" />
-                ) : vehicles.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No vehicle assigned.</p>
-                ) : (
-                  <Select
-                    value={selectedVehicleId}
-                    onValueChange={setSelectedVehicleId}
-                    disabled={tripStatus === "active" || tripStatus === "paused"}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select vehicle" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {vehicles.map((v) => (
-                        <SelectItem key={v.id} value={v.id}>
-                          {v.vehicle_name || v.name} ({v.vehicle_unique_id || v.plate})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              </motion.div>
-
-              <TripControls
-                tripStatus={tripStatus}
-                canStart={!!selectedVehicleId}
-                loading={loading}
-                onStart={handleStartTrip}
-                onPause={handlePause}
-                onResume={handleResume}
-                onEnd={handleEndTrip}
-                onShare={() => toast.message("Live location is shared while trip is active")}
-              />
-            </motion.div>
-          </motion.div>
-
-          <motion.div className="space-y-4 px-4 md:px-0 pb-6 md:pb-0">
-            <div className="hidden lg:block">
+        <div className="flex-1 relative min-h-0 mx-0">
+          <DriverLiveMap
+            position={position}
+            tripPath={tripPath}
+            tracking={trackingEnabled}
+            className="absolute inset-0"
+          />
+          <div className="absolute bottom-3 left-3 right-3 z-10 pointer-events-none">
+            <div className="pointer-events-auto max-w-md mx-auto">
               <LiveDistanceHero
-                distanceKm={distanceKm}
+                todayDistanceKm={todayTotalKm}
+                tripDistanceKm={tripDistanceKm}
                 speed={position?.speed}
                 lastFixAt={lastFixAt || lastSentAt}
                 tracking={trackingEnabled}
+                tripActive={tripActive}
               />
             </div>
-            <TripStats
-              distanceKm={distanceKm}
-              speed={position?.speed}
-              durationMin={durationMin}
-              points={tripPath.length}
-            />
-            <DeviceStatus gpsOk={gpsOk} online={socketConnected} battery={null} />
-            <DriverStorageStatus
-              driverEmail={user?.email}
-              tripActive={tripStatus === "active" || tripStatus === "paused"}
-            />
-            <EventTimeline events={events} />
-            <SOSPanel
-              position={position}
-              driverId={user.email}
-              vehicleId={selectedVehicleId}
-              tripId={activeTripId}
-            />
-          </motion.div>
-        </motion.div>
+          </div>
         </div>
-      </motion.main>
+
+        <DriverSimpleControls
+          tripStatus={tripStatus}
+          vehicles={vehicles}
+          selectedVehicleId={selectedVehicleId}
+          onVehicleChange={setSelectedVehicleId}
+          canStart={!!selectedVehicleId}
+          loading={loading || loadingVehicles}
+          onStart={handleStartTrip}
+          onEnd={handleEndTrip}
+          onSOS={() => setSosOpen(true)}
+          vehicleLocked={tripActive}
+        />
+      </div>
+
+      <AlertDialog open={sosOpen} onOpenChange={setSosOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Send emergency alert?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Dispatch will be notified with your live location immediately.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={sendSOS}
+            >
+              Send SOS
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </DriverShell>
   );
 }

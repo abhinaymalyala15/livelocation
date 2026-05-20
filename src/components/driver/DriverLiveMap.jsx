@@ -1,8 +1,8 @@
 import { useRef, useEffect, useMemo, useCallback } from "react";
-import { motion } from "framer-motion";
-import { GoogleMap, Marker, Circle } from "@react-google-maps/api";
+import { GoogleMap, Circle } from "@react-google-maps/api";
 import useRoadSnappedPath from "@/hooks/useRoadSnappedPath";
 import RoutePathPolylines from "@/components/tracking/RoutePathPolylines";
+import AnimatedVehicleMarker from "@/components/tracking/AnimatedVehicleMarker";
 import { useGoogleMaps } from "@/components/GoogleMapsProvider";
 import {
   defaultMapCenter,
@@ -13,13 +13,12 @@ import {
 import { getVehicleMapMarkerIcon } from "@/lib/vehicleMapMarker";
 import MapsUnavailable from "@/components/tracking/MapsUnavailable";
 import Loader from "@/components/tracking/Loader";
-import { Gauge } from "lucide-react";
-import moment from "moment";
 
 const mapOptions = { ...defaultMapOptions, gestureHandling: "greedy" };
 
 export default function DriverLiveMap({ position, tripPath = [], tracking, className = "" }) {
   const mapRef = useRef(null);
+  const panRafRef = useRef(null);
   const { isLoaded, isConfigured, loadError } = useGoogleMaps();
 
   const center = useMemo(() => {
@@ -27,10 +26,38 @@ export default function DriverLiveMap({ position, tripPath = [], tracking, class
     return defaultMapCenter;
   }, [position?.latitude, position?.longitude]);
 
+  const markerPosition = useMemo(() => {
+    if (!position) return null;
+    return { lat: position.latitude, lng: position.longitude };
+  }, [position?.latitude, position?.longitude]);
+
   const { displayPath: routePath, rawPath, isSnapped } = useRoadSnappedPath(tripPath, {
     enabled: tripPath.length > 1,
     debounceMs: 800,
   });
+
+  const smoothPanTo = useCallback((lat, lng) => {
+    const map = mapRef.current;
+    if (!map || !window.google?.maps) return;
+    const start = map.getCenter()?.toJSON();
+    if (!start) {
+      map.panTo({ lat, lng });
+      return;
+    }
+    if (panRafRef.current) cancelAnimationFrame(panRafRef.current);
+    const t0 = performance.now();
+    const duration = 500;
+    const step = (now) => {
+      const t = Math.min(1, (now - t0) / duration);
+      const eased = 1 - Math.pow(1 - t, 3);
+      map.panTo({
+        lat: start.lat + (lat - start.lat) * eased,
+        lng: start.lng + (lng - start.lng) * eased,
+      });
+      if (t < 1) panRafRef.current = requestAnimationFrame(step);
+    };
+    panRafRef.current = requestAnimationFrame(step);
+  }, []);
 
   const onLoad = useCallback((map) => {
     mapRef.current = map;
@@ -39,42 +66,33 @@ export default function DriverLiveMap({ position, tripPath = [], tracking, class
 
   useEffect(() => {
     if (!mapRef.current || !position) return;
-    mapRef.current.panTo({ lat: position.latitude, lng: position.longitude });
-  }, [position?.latitude, position?.longitude]);
+    smoothPanTo(position.latitude, position.longitude);
+  }, [position?.latitude, position?.longitude, smoothPanTo]);
 
   const markerIcon = useMemo(() => {
     if (!position || !isLoaded) return undefined;
     return getVehicleMapMarkerIcon(
-      { heading: position.heading ?? 0, status: "on_trip", current_speed: position.speed ?? 0 },
+      {
+        heading: position.heading ?? 0,
+        status: tracking ? "on_trip" : "available",
+        current_speed: position.speed ?? 0,
+      },
       { selected: true, driver: true }
     );
-  }, [position?.heading, position?.speed, isLoaded]);
+  }, [position?.heading, position?.speed, tracking, isLoaded]);
 
-  if (!isConfigured) return <MapsUnavailable />;
+  if (!isConfigured) return <MapsUnavailable className={className} />;
   if (loadError) {
     return (
-      <section
-        className="rounded-xl border border-destructive/30 bg-destructive/5 flex items-center justify-center min-h-[280px] p-6 text-center"
-        style={{ height: "min(420px, 55vh)" }}
-      >
-        <motion.div className="space-y-2 max-w-md">
-          <p className="font-semibold text-destructive">Map failed to load</p>
-          <p className="text-sm text-muted-foreground">{loadError.message}</p>
-          <p className="text-xs text-muted-foreground">
-            Enable Maps JavaScript API and check API key restrictions in Google Cloud Console.
-          </p>
-        </motion.div>
+      <section className="flex items-center justify-center min-h-[200px] p-6 text-center text-destructive text-sm">
+        Map failed to load.
       </section>
     );
   }
-  if (!isLoaded) return <Loader text="Loading map..." />;
+  if (!isLoaded) return <Loader text="Loading map..." className="h-full" />;
 
   return (
-    <motion.section
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      className={`relative border border-border overflow-hidden bg-muted/30 h-full min-h-[280px] ${className}`}
-    >
+    <div className={`relative w-full h-full min-h-0 bg-muted/20 ${className}`}>
       <GoogleMap
         mapContainerStyle={{ ...mapContainerStyle, minHeight: "100%", height: "100%" }}
         center={center}
@@ -88,42 +106,29 @@ export default function DriverLiveMap({ position, tripPath = [], tracking, class
           showRawGhost={isSnapped && rawPath.length > 1}
           color="#0d9488"
         />
-        {position && (
+        {markerPosition && (
           <>
             <Circle
-              center={{ lat: position.latitude, lng: position.longitude }}
+              center={markerPosition}
               radius={Math.max(position.accuracy || 25, 15)}
               options={{
                 fillColor: "#0d9488",
-                fillOpacity: 0.12,
+                fillOpacity: 0.1,
                 strokeColor: "#0d9488",
-                strokeOpacity: 0.35,
+                strokeOpacity: 0.3,
                 strokeWeight: 1,
+                clickable: false,
               }}
             />
-            <Marker
-              position={{ lat: position.latitude, lng: position.longitude }}
+            <AnimatedVehicleMarker
+              position={markerPosition}
               icon={markerIcon}
+              title="Your vehicle"
+              zIndex={100}
             />
           </>
         )}
       </GoogleMap>
-
-      {position && tracking && (
-        <div className="absolute bottom-3 left-3 right-3 sm:right-auto sm:max-w-xs bg-card/95 backdrop-blur border border-border rounded-lg p-3 shadow-sm text-sm">
-          <div className="flex items-center gap-2 text-primary font-medium mb-1">
-            <Gauge className="h-4 w-4" />
-            Live
-          </div>
-          <p className="font-semibold">{(position.speed ?? 0).toFixed(1)} km/h</p>
-          <p className="text-xs text-muted-foreground mt-1">
-            {position.latitude.toFixed(5)}, {position.longitude.toFixed(5)}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            ±{Math.round(position.accuracy || 0)}m · {moment(position.timestamp).format("HH:mm:ss")}
-          </p>
-        </div>
-      )}
-    </motion.section>
+    </div>
   );
 }

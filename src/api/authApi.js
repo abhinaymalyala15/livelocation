@@ -32,9 +32,11 @@ async function apiFetch(path, options = {}) {
   try {
     res = await fetch(path, options);
   } catch {
-    throw new Error(
-      "Cannot reach API server. Run both services: npm run dev (or npm run dev:api in another terminal)"
-    );
+    const hint =
+      import.meta.env.DEV
+        ? "Start the API: npm run dev (both) or npm run dev:api, then open http://127.0.0.1:5173"
+        : "The API is unavailable. Check that the backend is running and reachable.";
+    throw new Error(`Cannot reach API server. ${hint}`);
   }
   return parseJson(res);
 }

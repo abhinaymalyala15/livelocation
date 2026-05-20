@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { base44 } from "@/api/base44Client";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import StatsCards from "../components/tracking/StatsCards";
 import DashboardHero from "../components/tracking/DashboardHero";
 import VehicleList from "../components/tracking/VehicleList";
@@ -9,7 +9,7 @@ import Loader from "../components/tracking/Loader";
 import { LastUpdatedText, LiveBadge } from "../components/tracking/LiveIndicator";
 import ConnectionIndicator from "../components/tracking/ConnectionIndicator";
 import VehiclePopup from "../components/tracking/VehiclePopup";
-import useSocketTracking from "@/hooks/useSocketTracking";
+import useAdminFleetLive from "@/hooks/useAdminFleetLive";
 import { computePathDistanceKm, haversineMeters } from "@/lib/geo";
 import { toast } from "sonner";
 import moment from "moment";
@@ -23,13 +23,12 @@ export default function AdminDashboard() {
   const [tripPath, setTripPath] = useState([]);
   const [geofenceAlerts, setGeofenceAlerts] = useState([]);
   const geofenceStateRef = useRef({});
-  const queryClient = useQueryClient();
-  const socketConnected = useSocketTracking();
+  const { connected: socketConnected, lastLiveAt } = useAdminFleetLive();
 
-  const { data: vehicles = [], isLoading, dataUpdatedAt } = useQuery({
+  const { data: vehicles = [], isLoading } = useQuery({
     queryKey: ["admin-vehicles"],
     queryFn: () => base44.entities.Vehicle.list("-updated_date"),
-    refetchInterval: 5000,
+    staleTime: 60_000,
   });
 
   const { data: todayTrips = [] } = useQuery({
@@ -39,13 +38,13 @@ export default function AdminDashboard() {
       const today = moment().startOf("day");
       return all.filter((t) => moment(t.start_time).isAfter(today));
     },
-    refetchInterval: 15000,
+    staleTime: 120_000,
   });
 
   const { data: geofences = [] } = useQuery({
     queryKey: ["geofences"],
     queryFn: () => base44.entities.Geofence.list(),
-    refetchInterval: 30000,
+    staleTime: 300_000,
   });
 
   useEffect(() => {
@@ -88,13 +87,6 @@ export default function AdminDashboard() {
     selectedVehicle?.longitude,
     selectedVehicle?.last_location_update,
   ]);
-
-  useEffect(() => {
-    const unsubscribe = base44.entities.Vehicle.subscribe(() => {
-      queryClient.invalidateQueries({ queryKey: ["admin-vehicles"] });
-    });
-    return unsubscribe;
-  }, [queryClient]);
 
   useEffect(() => {
     if (!geofences.length || !vehicles.length) return;
@@ -193,7 +185,7 @@ export default function AdminDashboard() {
           <DashboardHero
             activeCount={activeCount}
             totalCount={vehicles.length}
-            lastUpdated={dataUpdatedAt}
+            lastUpdated={lastLiveAt}
           />
           <StatsCards vehicles={vehicles} tripsToday={todayTrips.length} />
         </div>
@@ -204,8 +196,8 @@ export default function AdminDashboard() {
             {socketConnected ? "Realtime sync active" : "Reconnecting..."}
           </span>
           <LastUpdatedText
-            timestamp={dataUpdatedAt ? new Date(dataUpdatedAt).toISOString() : null}
-            prefix="Fleet"
+            timestamp={lastLiveAt}
+            prefix="Live"
             className="font-medium"
           />
           {socketConnected && <LiveBadge label="LIVE" />}
