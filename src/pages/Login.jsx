@@ -20,7 +20,7 @@ const fadeUp = {
 };
 
 export default function Login() {
-  const [roleTab, setRoleTab] = useState("driver");
+  const [roleTab, setRoleTab] = useState("driver"); // drivers: name only — use this tab
   const [driverName, setDriverName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -53,29 +53,25 @@ export default function Login() {
   };
 
   const driverNameLooksLikeEmail = driverName.trim().includes("@");
+  const adminFieldLooksLikeName = email.trim().length > 0 && !email.trim().includes("@");
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
     setSubmitting(true);
     try {
-      const nameTrim = driverName.trim();
-      const useAdminLogin =
-        roleTab === "admin" || (roleTab === "driver" && nameTrim.includes("@"));
-
-      const loggedIn = useAdminLogin
-        ? await login(
-            (roleTab === "admin" ? email : nameTrim).trim().toLowerCase(),
-            password
-          )
-        : await login(nameTrim, password, { asDriver: true });
+      const identifier = (roleTab === "admin" ? email : driverName).trim();
+      const loggedIn = identifier.includes("@")
+        ? await login(identifier.toLowerCase(), password)
+        : await login(identifier, password, { asDriver: true });
       navigateAfterLogin(loggedIn);
     } catch (err) {
+      const identifier = (roleTab === "admin" ? email : driverName).trim();
       setError(
         err.message ||
-          (roleTab === "driver" && !driverNameLooksLikeEmail
-            ? "Invalid name or password. Ask admin for your login."
-            : "Invalid email or password.")
+          (identifier.includes("@")
+            ? "Invalid email or password."
+            : "Invalid name or password. Check the name and password from Admin → Drivers.")
       );
     } finally {
       setSubmitting(false);
@@ -83,10 +79,10 @@ export default function Login() {
   };
 
   const handleTabChange = (tab) => {
-    if (tab === "admin" && driverName.trim().includes("@")) {
-      setEmail(driverName.trim().toLowerCase());
+    if (tab === "admin" && driverName.trim()) {
+      setEmail(driverName.trim());
     }
-    if (tab === "driver" && email.trim().includes("@")) {
+    if (tab === "driver" && email.trim()) {
       setDriverName(email.trim());
     }
     setRoleTab(tab);
@@ -222,23 +218,30 @@ export default function Login() {
               ) : (
                 <motion.div className="space-y-2">
                   <Label htmlFor="email" className="text-xs font-medium text-muted-foreground">
-                    Email
+                    Admin email
                   </Label>
                   <motion.div className="relative group">
                     <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
                     <Input
                       id="email"
-                      type="email"
+                      type="text"
                       value={email}
                       onChange={(e) => {
                         setEmail(e.target.value);
                         setError("");
                       }}
                       className="h-12 pl-10 rounded-xl border-border/80 bg-muted/30 focus-visible:ring-primary/25 focus-visible:border-primary/50"
+                      placeholder="admin@fleet.com"
                       required
-                      autoComplete="email"
+                      autoComplete="username"
                     />
                   </motion.div>
+                  {adminFieldLooksLikeName && (
+                    <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                      Driver accounts use a <strong>name</strong>, not email. Switch to the <strong>Driver</strong> tab, or
+                      press Sign in — we will sign you in as a driver automatically.
+                    </p>
+                  )}
                 </motion.div>
               )}
 
@@ -285,10 +288,10 @@ export default function Login() {
           </motion.div>
 
           <p className="text-xs text-center text-muted-foreground mt-6 leading-relaxed">
-            <span className="block font-medium text-foreground/80 mb-1">Admin</span>
-            admin@fleet.com / admin123
-            <span className="block font-medium text-foreground/80 mt-3 mb-1">Drivers</span>
-            Name and password must match what admin entered under <strong>Drivers</strong> in the admin panel.
+            <span className="block font-medium text-foreground/80 mb-1">Drivers</span>
+            Use the <strong>Driver</strong> tab — enter your <strong>name</strong> and password from Admin → Drivers (no @ needed).
+            <span className="block font-medium text-foreground/80 mt-3 mb-1">Admin</span>
+            Use the <strong>Admin</strong> tab — email <strong>admin@fleet.com</strong> / password <strong>admin123</strong>
           </p>
         </motion.div>
       </motion.div>
