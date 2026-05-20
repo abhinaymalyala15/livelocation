@@ -208,7 +208,7 @@ export default function DriverDashboard() {
 
   return (
     <DriverShell user={user} onLogout={handleLogout} minimal>
-      <div className="flex-1 flex flex-col min-h-0 max-h-[100dvh]">
+      <div className="grid w-full max-w-[100vw] overflow-hidden h-[100dvh] max-h-[100dvh] grid-rows-[auto_auto_minmax(0,1fr)_auto]">
         <DriverGpsStrip
           tripActive={tripActive}
           gpsOk={connectivity.gpsOk}

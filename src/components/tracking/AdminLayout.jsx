@@ -40,7 +40,7 @@ export default function AdminLayout() {
           onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
           connected={true}
         />
-        <main className="flex-1 overflow-auto bg-[linear-gradient(180deg,hsl(var(--background))_0%,hsl(210_20%_96%)_100%)]">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden lg:overflow-hidden min-h-0 min-w-0 max-w-full bg-[linear-gradient(180deg,hsl(var(--background))_0%,hsl(210_20%_96%)_100%)] overscroll-y-contain">
           <Outlet />
         </main>
       </div>

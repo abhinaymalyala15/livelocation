@@ -26,7 +26,7 @@ export default function LiveDistanceHero({
       layout
       className="rounded-2xl border border-border/80 bg-card/95 backdrop-blur-md shadow-xl ring-1 ring-black/5 overflow-hidden"
     >
-      <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white px-5 py-5 sm:py-6">
+      <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white px-4 py-4 sm:px-5 sm:py-6">
         <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-white/70 flex items-center gap-2">
           <CalendarDays className="h-3.5 w-3.5" />
           Today&apos;s Distance

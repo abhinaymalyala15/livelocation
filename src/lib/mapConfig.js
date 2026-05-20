@@ -6,7 +6,7 @@ export const HYDERABAD_CENTER = { lat: 17.385, lng: 78.4867 };
 export const mapContainerStyle = {
   width: '100%',
   height: '100%',
-  minHeight: '400px',
+  minHeight: '240px',
 };
 
 export const defaultMapCenter = {

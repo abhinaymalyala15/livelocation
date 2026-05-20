@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import MobileDataCards from "@/components/tracking/MobileDataCards";
 import {
   Table,
   TableBody,
@@ -150,7 +151,27 @@ export default function AdminDrivers() {
         <CardHeader className="pb-3">
           <h3 className="font-semibold">Registered drivers ({drivers.length})</h3>
         </CardHeader>
-        <CardContent className="p-0 table-scroll">
+        <CardContent className="p-0">
+          <MobileDataCards
+            items={drivers}
+            emptyMessage="No drivers yet. Create one above."
+            renderCard={(d) => {
+              const vehicle = d.vehicles?.[0];
+              return (
+                <div className="space-y-1">
+                  <p className="font-semibold text-base">{d.display_name || d.name}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {vehicle?.vehicle_name || vehicle?.name || "No vehicle"} ·{" "}
+                    <span className="font-mono">{vehicle?.vehicle_unique_id || vehicle?.plate || "—"}</span>
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {d.created_at ? moment(d.created_at).format("DD MMM YYYY") : ""}
+                  </p>
+                </div>
+              );
+            }}
+          />
+          <div className="hidden lg:block table-scroll">
           <Table className="min-w-[520px]">
             <TableHeader>
               <TableRow>
@@ -186,6 +207,7 @@ export default function AdminDrivers() {
               )}
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
     </div>

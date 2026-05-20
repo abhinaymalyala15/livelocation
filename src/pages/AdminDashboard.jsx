@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
 import StatsCards from "../components/tracking/StatsCards";
+import MobileAdminStats from "../components/tracking/MobileAdminStats";
 import DashboardHero from "../components/tracking/DashboardHero";
 import VehicleList from "../components/tracking/VehicleList";
 import MapView from "../components/tracking/MapContainer";
@@ -150,38 +151,12 @@ export default function AdminDashboard() {
     tripPath.length >= 2 ? computePathDistanceKm(tripPath) : null;
 
   return (
-    <div className="h-full flex flex-col lg:flex-row min-h-0">
-      {/* Mobile: map first; desktop: sidebar left */}
-      <aside className="order-2 lg:order-1 w-full lg:w-80 xl:w-96 flex flex-col border-t lg:border-t-0 lg:border-r border-border bg-card shrink-0 shadow-sm min-h-0 max-h-[38dvh] sm:max-h-[42vh] lg:max-h-full">
-        <div className="flex-1 min-h-0 overflow-hidden">
-          <VehicleList
-            vehicles={vehicles}
-            selectedVehicleId={selectedVehicle?.id}
-            onSelectVehicle={handleSelectVehicle}
-            alertedVehicleIds={alertedVehicleIds}
-          />
-        </div>
-        {selectedVehicle ? (
-          <div className="shrink-0 border-t border-border bg-muted/20 max-h-[38vh] lg:max-h-[45%] overflow-y-auto">
-            <p className="px-3 pt-2.5 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Selected vehicle
-            </p>
-            <VehiclePopup
-              vehicle={selectedVehicle}
-              tripDistanceKm={selectedTripDistanceKm}
-              compact
-            />
-          </div>
-        ) : (
-          <div className="shrink-0 border-t border-border px-3 py-3 text-xs text-muted-foreground text-center">
-            Select a vehicle to view driver, speed, and trip details
-          </div>
-        )}
-      </aside>
+    <div className="w-full max-w-[100vw] overflow-x-hidden flex flex-col lg:flex-row lg:h-full lg:min-h-0">
+      {/* Map + stats (first on phone) */}
+      <section className="flex flex-col min-w-0 lg:flex-1 lg:order-2 lg:min-h-0 lg:overflow-hidden">
+        <MobileAdminStats vehicles={vehicles} tripsToday={todayTrips.length} />
 
-      {/* Right: stats + full map (no overlays) */}
-      <div className="order-1 lg:order-2 flex-1 flex flex-col overflow-hidden min-w-0 min-h-[min(55dvh,520px)] sm:min-h-[min(52dvh,560px)] lg:min-h-0">
-        <div className="p-3 sm:p-4 lg:p-5 space-y-3 sm:space-y-4 shrink-0">
+        <div className="hidden lg:block shrink-0 p-5 space-y-4">
           <DashboardHero
             activeCount={activeCount}
             totalCount={vehicles.length}
@@ -190,21 +165,17 @@ export default function AdminDashboard() {
           <StatsCards vehicles={vehicles} tripsToday={todayTrips.length} />
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 px-4 lg:px-5 pb-2 shrink-0">
+        <div className="shrink-0 flex flex-wrap items-center gap-2 px-3 py-2 lg:px-5 lg:pb-2 border-b lg:border-b-0 border-border/60">
           <ConnectionIndicator connected={socketConnected} />
-          <span className="text-[11px] text-muted-foreground">
-            {socketConnected ? "Realtime sync active" : "Reconnecting..."}
+          <span className="text-xs text-muted-foreground">
+            {socketConnected ? "Live sync" : "Reconnecting…"}
           </span>
-          <LastUpdatedText
-            timestamp={lastLiveAt}
-            prefix="Live"
-            className="font-medium"
-          />
+          <LastUpdatedText timestamp={lastLiveAt} prefix="Updated" className="text-xs font-medium" />
           {socketConnected && <LiveBadge label="LIVE" />}
         </div>
 
-        <div className="flex-1 px-3 sm:px-4 lg:px-5 pb-3 sm:pb-4 lg:pb-5 min-h-[min(40dvh,400px)] sm:min-h-[min(45dvh,480px)]">
-          <div className="h-full min-h-[min(40dvh,400px)] sm:min-h-[min(45dvh,480px)] rounded-xl sm:rounded-2xl overflow-hidden border border-border shadow-lg surface-card ring-1 ring-black/5 map-container-fill">
+        <div className="relative w-full h-[50dvh] min-h-[300px] max-h-[65vh] shrink-0 lg:flex-1 lg:min-h-[360px] lg:max-h-none lg:h-auto px-3 py-3 lg:px-5 lg:pb-5">
+          <div className="absolute inset-3 lg:inset-0 lg:relative lg:h-full rounded-2xl overflow-hidden border border-border shadow-lg surface-card ring-1 ring-black/5 map-container-fill">
             <MapView
               vehicles={vehicles}
               selectedVehicle={selectedVehicle}
@@ -217,7 +188,35 @@ export default function AdminDashboard() {
             />
           </div>
         </div>
-      </div>
+      </section>
+
+      {/* Fleet list (below map on phone) */}
+      <aside className="w-full lg:w-80 xl:w-96 flex flex-col border-t lg:border-t-0 lg:border-r border-border bg-card lg:order-1 lg:shrink-0 lg:min-h-0 lg:max-h-full min-h-[min(42dvh,480px)] lg:h-full">
+        <div className="flex-1 min-h-[200px] lg:min-h-0 overflow-hidden">
+          <VehicleList
+            vehicles={vehicles}
+            selectedVehicleId={selectedVehicle?.id}
+            onSelectVehicle={handleSelectVehicle}
+            alertedVehicleIds={alertedVehicleIds}
+          />
+        </div>
+        {selectedVehicle ? (
+          <div className="shrink-0 border-t border-border bg-muted/20 max-h-[40dvh] lg:max-h-[42%] overflow-y-auto">
+            <p className="px-3 pt-2.5 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Selected vehicle
+            </p>
+            <VehiclePopup
+              vehicle={selectedVehicle}
+              tripDistanceKm={selectedTripDistanceKm}
+              compact
+            />
+          </div>
+        ) : (
+          <div className="shrink-0 border-t border-border px-3 py-4 text-sm text-muted-foreground text-center">
+            Tap a vehicle to see driver & trip details
+          </div>
+        )}
+      </aside>
     </div>
   );
 }

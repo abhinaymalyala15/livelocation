@@ -22,7 +22,7 @@ export default function VehicleList({ vehicles, selectedVehicleId, onSelectVehic
 
   return (
     <div className="flex flex-col h-full bg-card">
-      <div className="p-4 border-b border-border space-y-3 shrink-0">
+      <div className="p-3 sm:p-4 border-b border-border space-y-3 shrink-0">
         <div className="flex items-center justify-between">
           <h2 className="font-semibold text-sm text-foreground">Fleet</h2>
           <span className="text-xs text-muted-foreground tabular-nums">

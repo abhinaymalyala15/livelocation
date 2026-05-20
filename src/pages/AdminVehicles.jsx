@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import StatusBadge from "../components/tracking/StatusBadge";
+import MobileDataCards from "@/components/tracking/MobileDataCards";
 import Loader from "../components/tracking/Loader";
 import PageHeader from "../components/tracking/PageHeader";
 import { Plus, Truck, Search, Trash2 } from "lucide-react";
@@ -164,7 +165,42 @@ export default function AdminVehicles() {
           </div>
         </CardHeader>
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
+          <MobileDataCards
+            items={filtered}
+            emptyMessage="No vehicles found"
+            renderCard={(v) => (
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                      <Truck className="h-5 w-5 text-primary" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-semibold truncate">{v.vehicle_name}</p>
+                      <p className="text-xs font-mono text-muted-foreground">{v.vehicle_unique_id}</p>
+                    </div>
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-2">{v.driver_name || "Unassigned"}</p>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <StatusBadge status={v.status} />
+                    <span className="text-xs text-muted-foreground">
+                      {v.last_location_update ? moment(v.last_location_update).fromNow() : "Never"}
+                    </span>
+                  </div>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-11 w-11 shrink-0 touch-target text-destructive border-destructive/30"
+                  onClick={() => setVehicleToDelete(v)}
+                >
+                  <Trash2 className="h-5 w-5" />
+                </Button>
+              </div>
+            )}
+          />
+          <div className="hidden lg:block overflow-x-auto table-scroll">
             <Table>
               <TableHeader>
                 <TableRow>

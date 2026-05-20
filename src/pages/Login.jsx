@@ -138,7 +138,7 @@ export default function Login() {
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          className="w-full max-w-[440px] relative z-10"
+          className="w-full max-w-[440px] sm:max-w-md relative z-10 mx-auto"
         >
           <motion.div className="lg:hidden flex items-center justify-center gap-3 mb-8">
             <motion.div className="h-11 w-11 rounded-2xl bg-primary flex items-center justify-center shadow-lg">
@@ -202,7 +202,7 @@ export default function Login() {
                         setDriverName(e.target.value);
                         setError("");
                       }}
-                      className="h-12 pl-10 rounded-xl border-border/80 bg-muted/30 focus-visible:ring-primary/25 focus-visible:border-primary/50"
+                      className="h-12 text-base pl-10 rounded-xl border-border/80 bg-muted/30 focus-visible:ring-primary/25 focus-visible:border-primary/50"
                       placeholder="e.g. Rahul Sharma"
                       required
                       autoComplete="username"
@@ -230,7 +230,7 @@ export default function Login() {
                         setEmail(e.target.value);
                         setError("");
                       }}
-                      className="h-12 pl-10 rounded-xl border-border/80 bg-muted/30 focus-visible:ring-primary/25 focus-visible:border-primary/50"
+                      className="h-12 text-base pl-10 rounded-xl border-border/80 bg-muted/30 focus-visible:ring-primary/25 focus-visible:border-primary/50"
                       placeholder="admin@fleet.com"
                       required
                       autoComplete="username"

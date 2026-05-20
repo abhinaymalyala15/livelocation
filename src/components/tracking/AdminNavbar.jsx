@@ -16,7 +16,7 @@ export default function AdminNavbar({ user, onToggleSidebar, connected }) {
   const page = PAGE_TITLES[pathname] || { title: "FleetTrack", subtitle: "Admin" };
 
   return (
-    <header className="h-14 shrink-0 border-b border-border bg-card/95 backdrop-blur-md flex items-center justify-between px-4 lg:px-6 sticky top-0 z-20">
+    <header className="h-14 min-h-[3.5rem] shrink-0 border-b border-border bg-card/95 backdrop-blur-md flex items-center justify-between px-3 sm:px-4 lg:px-6 sticky top-0 z-20 safe-top">
       <div className="flex items-center gap-3 min-w-0">
         <Button variant="ghost" size="icon" className="lg:hidden shrink-0 touch-target" onClick={onToggleSidebar} aria-label="Open menu">
           <Menu className="h-5 w-5" />

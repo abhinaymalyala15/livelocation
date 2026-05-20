@@ -14,7 +14,7 @@ export default function VehicleListItem({ vehicle, isSelected, isAlerted, onClic
       type="button"
       onClick={onClick}
       className={cn(
-        "w-full text-left p-3 rounded-xl border transition-all duration-200 hover:shadow-md",
+        "w-full text-left p-4 min-h-[4.5rem] rounded-xl border transition-all duration-200 active:scale-[0.99] hover:shadow-md touch-manipulation",
         isAlerted
           ? "bg-red-500/5 border-red-500/40 shadow-sm"
           : isSelected
