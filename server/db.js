@@ -1,6 +1,9 @@
 import path from "path";
 import { DatabaseSync } from "node:sqlite";
+import { loadProjectEnv } from "./loadEnv.js";
 import { initStorage } from "./storage.js";
+
+loadProjectEnv();
 
 const { dataDir, dbPath } = initStorage();
 const legacyJsonPath = path.join(dataDir, "fleet-db.json");
@@ -62,6 +65,26 @@ db.exec(`
   );
 
   CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
+`);
+
+const userCols = db.prepare("PRAGMA table_info(users)").all();
+if (!userCols.some((c) => c.name === "login_name")) {
+  db.exec("ALTER TABLE users ADD COLUMN login_name TEXT");
+  db.exec(
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_login_name ON users(login_name) WHERE login_name IS NOT NULL"
+  );
+  const drivers = db
+    .prepare("SELECT id, display_name FROM users WHERE role = 'driver'")
+    .all();
+  for (const row of drivers) {
+    if (row.display_name) {
+      const loginName = String(row.display_name).trim().toLowerCase().replace(/\s+/g, " ");
+      db.prepare("UPDATE users SET login_name = ? WHERE id = ?").run(loginName, row.id);
+    }
+  }
+}
+
+db.exec(`
 
   CREATE TABLE IF NOT EXISTS auth_sessions (
     token TEXT PRIMARY KEY,

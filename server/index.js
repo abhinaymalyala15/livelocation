@@ -4,7 +4,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { createServer } from "http";
-import { dbPath, getDriverDebug, getStorageSummary } from "./db.js";
+import { db, dbPath, getDriverDebug, getStorageSummary } from "./db.js";
 import { initStorage, getStorageHealth, logStorageStartup } from "./storage.js";
 import { seedDatabaseIfEmpty } from "./seed.js";
 import {
@@ -192,11 +192,24 @@ if (fs.existsSync(distDir)) {
   });
 }
 
+function shutdown() {
+  try {
+    db.exec("PRAGMA wal_checkpoint(TRUNCATE)");
+  } catch {
+    /* ignore */
+  }
+  process.exit(0);
+}
+
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);
+
 httpServer.listen(PORT, () => {
   const storage = getStorageHealth();
   console.log(`FleetTrack API: http://localhost:${PORT}`);
   console.log(`Realtime: Socket.IO on /socket.io`);
+  console.log(`SQLite database: ${storage.database}`);
   if (!storage.persistentDataDir) {
-    console.log(`SQLite (local/ephemeral): ${storage.database}`);
+    console.log(`[storage] Tip: set FLEET_DATA_DIR=./data in .env.local to keep data in the project folder`);
   }
 });

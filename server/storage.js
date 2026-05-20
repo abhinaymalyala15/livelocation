@@ -3,6 +3,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const projectRoot = path.join(__dirname, "..");
 
 /** Default Render persistent disk mount (see render.yaml) */
 export const RENDER_DATA_DIR = "/var/data";
@@ -11,8 +12,12 @@ let storageInfo = null;
 
 function resolveDataDir() {
   const configured = process.env.FLEET_DATA_DIR?.trim();
-  if (configured) return path.resolve(configured);
-  return path.join(__dirname, "..", "data");
+  if (configured) {
+    return path.isAbsolute(configured)
+      ? configured
+      : path.resolve(projectRoot, configured);
+  }
+  return path.join(projectRoot, "data");
 }
 
 /**
